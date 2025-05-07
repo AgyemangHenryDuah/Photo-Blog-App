@@ -1,0 +1,1 @@
+// Implement Lambda to delete photo (moves to recycle bin) accordingly

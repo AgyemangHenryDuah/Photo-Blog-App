@@ -1,0 +1,1 @@
+// Implement Lambda to generate shareable link accordingly

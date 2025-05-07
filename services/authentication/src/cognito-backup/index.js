@@ -1,0 +1,1 @@
+// Implement Lambda for Cognito backup (daily snapshot) accordingly

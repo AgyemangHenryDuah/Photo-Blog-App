@@ -1,0 +1,1 @@
+// Implement Lambda to restore photo from recycle bin accordingly

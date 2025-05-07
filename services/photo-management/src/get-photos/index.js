@@ -1,0 +1,1 @@
+// Implement Lambda to get user photos accordingly

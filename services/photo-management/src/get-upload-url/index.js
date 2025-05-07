@@ -1,0 +1,1 @@
+// Implement Lambda to generate presigned URL accordingly

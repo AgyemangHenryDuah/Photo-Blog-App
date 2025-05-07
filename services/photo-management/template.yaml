@@ -1,0 +1,250 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Photo Blog - Photo Management Service
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+  ProcessedBucketName:
+    Type: String
+  SharedLayerArn:
+    Type: String
+
+Resources:
+  # API Gateway
+  PhotosApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Environment
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
+        AllowOrigin: "'*'"
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !Sub '{{resolve:ssm:/photo-blog/${Environment}/user-pool-arn}}'
+        AddDefaultAuthorizerToCorsPreflight: false # To hopefully mitigate our previously encountered cors issues :)
+
+  # Get user photos function
+  GetPhotosFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/get-photos/
+      Handler: index.handler
+      Description: Retrieves user photos
+      Layers:
+        - !Ref SharedLayerArn
+      Environment:
+        Variables:
+          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog/${Environment}/photos-table}}'
+          PROCESSED_BUCKET: !Ref ProcessedBucketName
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: '*'
+        - S3ReadPolicy:
+            BucketName: !Ref ProcessedBucketName
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref PhotosApi
+            Path: /photos
+            Method: get
+
+  # Upload photo function (generates presigned URL)
+  GetUploadUrlFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/get-upload-url/
+      Handler: index.handler
+      Description: Generates presigned URL for direct S3 upload
+      Layers:
+        - !Ref SharedLayerArn
+      Environment:
+        Variables:
+          STAGING_BUCKET: !Sub '{{resolve:ssm:/photo-blog/${Environment}/staging-bucket}}'
+      Policies:
+        - S3WritePolicy:
+            BucketName: '*'
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref PhotosApi
+            Path: /photos/upload-url
+            Method: post
+
+  # Delete photo function (moves to recycle bin)
+  DeletePhotoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/delete-photo/
+      Handler: index.handler
+      Description: Moves photo to recycle bin
+      Layers:
+        - !Ref SharedLayerArn
+      Environment:
+        Variables:
+          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog/${Environment}/photos-table}}'
+          PROCESSED_BUCKET: !Ref ProcessedBucketName
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: '*'
+        - S3CrudPolicy:
+            BucketName: !Ref ProcessedBucketName
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref PhotosApi
+            Path: /photos/{photoId}
+            Method: delete
+
+  # Restore photo from recycle bin
+  RestorePhotoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/restore-photo/
+      Handler: index.handler
+      Description: Restores photo from recycle bin
+      Layers:
+        - !Ref SharedLayerArn
+      Environment:
+        Variables:
+          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog/${Environment}/photos-table}}'
+          PROCESSED_BUCKET: !Ref ProcessedBucketName
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: '*'
+        - S3CrudPolicy:
+            BucketName: !Ref ProcessedBucketName
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref PhotosApi
+            Path: /photos/{photoId}/restore
+            Method: post
+
+  # Get recycled photos
+  GetRecycledPhotosFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/get-recycled/
+      Handler: index.handler
+      Description: Retrieves user's recycled photos
+      Layers:
+        - !Ref SharedLayerArn
+      Environment:
+        Variables:
+          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog/${Environment}/photos-table}}'
+          PROCESSED_BUCKET: !Ref ProcessedBucketName
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: '*'
+        - S3ReadPolicy:
+            BucketName: !Ref ProcessedBucketName
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref PhotosApi
+            Path: /photos/recycled
+            Method: get
+
+  # Generate shareable link
+  GenerateShareLinkFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/generate-share-link/
+      Handler: index.handler
+      Description: Generates time-bound shareable link for a photo
+      Layers:
+        - !Ref SharedLayerArn
+      Environment:
+        Variables:
+          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog/${Environment}/photos-table}}'
+          PROCESSED_BUCKET: !Ref ProcessedBucketName
+          SHARE_LINKS_TABLE: !Ref ShareLinksTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ShareLinksTable
+        - DynamoDBReadPolicy:
+            TableName: '*'
+        - S3ReadPolicy:
+            BucketName: !Ref ProcessedBucketName
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref PhotosApi
+            Path: /photos/{photoId}/share
+            Method: post
+
+  # Get shared photo
+  GetSharedPhotoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/get-shared-photo/
+      Handler: index.handler
+      Description: Retrieves a shared photo by share token
+      Layers:
+        - !Ref SharedLayerArn
+      Environment:
+        Variables:
+          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog/${Environment}/photos-table}}'
+          PROCESSED_BUCKET: !Ref ProcessedBucketName
+          SHARE_LINKS_TABLE: !Ref ShareLinksTable
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ShareLinksTable
+        - DynamoDBReadPolicy:
+            TableName: '*'
+        - S3ReadPolicy:
+            BucketName: !Ref ProcessedBucketName
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref PhotosApi
+            Path: /shared/{shareToken}
+            Method: get
+            Auth:
+              Authorizer: NONE
+
+  # Table for shared links
+  ShareLinksTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub photo-blog-share-links-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: shareToken
+          AttributeType: S
+      KeySchema:
+        - AttributeName: shareToken
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+      # DR Replication to backup region
+      GlobalTableConfiguration:
+        ReplicationGroup:
+          - Region: !Ref AWS::Region
+          - Region: !Sub '{{resolve:ssm:/photo-blog/${Environment}/dr-region}}'
+
+Outputs:
+  PhotosApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub https://${PhotosApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+    Export:
+      Name: !Sub ${AWS::StackName}-ApiEndpoint
+      
+  ShareLinksTableName:
+    Description: DynamoDB table for share links
+    Value: !Ref ShareLinksTable
+    Export:
+      Name: !Sub ${AWS::StackName}-ShareLinksTable
