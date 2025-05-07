@@ -1,0 +1,200 @@
+name: Deploy to Development
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+    inputs:
+      service:
+        description: 'Service to deploy (all, auth, image-processing, photo-management)'
+        required: true
+        default: 'all'
+
+env:
+  AWS_REGION: eu-central-1
+  DR_REGION: eu-west-1
+  ENVIRONMENT: dev
+  DOMAIN_NAME: dev.mscv2group3.link
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-infrastructure:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+    if: github.event.inputs.service == 'all' || github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      - uses: aws-actions/setup-sam@v2
+      - uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      # Store DR region in Parameter Store
+      - name: Set DR Region Parameter
+        run: |
+          aws ssm put-parameter --name "/photo-blog-app/${ENVIRONMENT}/dr-region" --value "${DR_REGION}" --type "String" --overwrite
+      
+      # Deploy root stack
+      - name: Build and deploy root stack
+        run: |
+          sam build -t template.yaml
+          sam deploy --stack-name photo-blog-app-${ENVIRONMENT} \
+            --parameter-overrides Environment=${ENVIRONMENT} DomainName=${DOMAIN_NAME} \
+            PrimaryRegion=${AWS_REGION} BackupRegion=${DR_REGION} \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
+            --no-fail-on-empty-changeset
+      
+      # Export shared resources to Parameter Store
+      - name: Export shared resources
+        run: |
+          # Get stack outputs and store in Parameter Store for cross-stack references
+          STAGING_BUCKET=$(aws cloudformation describe-stacks --stack-name photo-blog-app-${ENVIRONMENT} --query "Stacks[0].Outputs[?OutputKey=='StagingBucketName'].OutputValue" --output text)
+          PROCESSED_BUCKET=$(aws cloudformation describe-stacks --stack-name photo-blog-app-${ENVIRONMENT} --query "Stacks[0].Outputs[?OutputKey=='ProcessedImagesBucketName'].OutputValue" --output text)
+          SHARED_LAYER=$(aws cloudformation describe-stacks --stack-name photo-blog-app-${ENVIRONMENT} --query "Stacks[0].Outputs[?OutputKey=='SharedLayerArn'].OutputValue" --output text)
+          
+          aws ssm put-parameter --name "/photo-blog-app/${ENVIRONMENT}/staging-bucket" --value "${STAGING_BUCKET}" --type "String" --overwrite
+          aws ssm put-parameter --name "/photo-blog-app/${ENVIRONMENT}/processed-bucket" --value "${PROCESSED_BUCKET}" --type "String" --overwrite
+          aws ssm put-parameter --name "/photo-blog-app/${ENVIRONMENT}/shared-layer" --value "${SHARED_LAYER}" --type "String" --overwrite
+
+  deploy-auth-service:
+    name: Deploy Auth Service
+    runs-on: ubuntu-latest
+    needs: deploy-infrastructure
+    if: github.event.inputs.service == 'all' || github.event.inputs.service == 'auth' || github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      - uses: aws-actions/setup-sam@v2
+      - uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      # Install dependencies for auth service
+      - name: Install dependencies
+        run: |
+          cd services/auth-service/src
+          npm ci
+
+      # Deploy auth service
+      - name: Build and deploy auth service
+        run: |
+          cd services/authentication
+          sam build -t template.yaml
+          sam deploy --stack-name photo-blog-app-auth-${ENVIRONMENT} \
+            --parameter-overrides Environment=${ENVIRONMENT} DomainName=${DOMAIN_NAME} \
+            SharedLayerArn=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/shared-layer" --query "Parameter.Value" --output text) \
+            --capabilities CAPABILITY_IAM \
+            --no-fail-on-empty-changeset
+      
+      # Export auth resources to Parameter Store
+      - name: Export auth resources
+        run: |
+          USER_POOL_ID=$(aws cloudformation describe-stacks --stack-name photo-blog-app-auth-${ENVIRONMENT} --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text)
+          USER_POOL_CLIENT=$(aws cloudformation describe-stacks --stack-name photo-blog-app-auth-${ENVIRONMENT} --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" --output text)
+          USER_POOL_ARN=$(aws cognito-idp describe-user-pool --user-pool-id ${USER_POOL_ID} --query "UserPool.Arn" --output text)
+          
+          aws ssm put-parameter --name "/photo-blog-app/${ENVIRONMENT}/user-pool-id" --value "${USER_POOL_ID}" --type "String" --overwrite
+          aws ssm put-parameter --name "/photo-blog-app/${ENVIRONMENT}/user-pool-client-id" --value "${USER_POOL_CLIENT}" --type "String" --overwrite
+          aws ssm put-parameter --name "/photo-blog-app/${ENVIRONMENT}/user-pool-arn" --value "${USER_POOL_ARN}" --type "String" --overwrite
+
+  deploy-image-processing:
+    name: Deploy Image Processing Service
+    runs-on: ubuntu-latest
+    needs: deploy-infrastructure
+    if: github.event.inputs.service == 'all' || github.event.inputs.service == 'image-processing' || github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      - uses: aws-actions/setup-sam@v2
+      - uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      # Install dependencies for image processing service
+      - name: Install dependencies
+        run: |
+          cd services/image-processing/src
+          npm ci
+          cd ../../../common/layers/image-processing/nodejs
+          npm ci
+      
+      # Deploy image processing service
+      - name: Build and deploy image processing service
+        run: |
+          cd services/image-processing
+          sam build -t template.yaml
+          sam deploy --stack-name photo-blog-app-image-processing-${ENVIRONMENT} \
+            --parameter-overrides \
+              Environment=${ENVIRONMENT} \
+              StagingBucketName=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/staging-bucket" --query "Parameter.Value" --output text) \
+              ProcessedBucketName=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/processed-bucket" --query "Parameter.Value" --output text) \
+              SharedLayerArn=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/shared-layer" --query "Parameter.Value" --output text) \
+            --capabilities CAPABILITY_IAM \
+            --no-fail-on-empty-changeset
+      
+      # Export image processing resources to Parameter Store
+      - name: Export image processing resources
+        run: |
+          PHOTOS_TABLE=$(aws cloudformation describe-stacks --stack-name photo-blog-app-image-processing-${ENVIRONMENT} --query "Stacks[0].Outputs[?OutputKey=='PhotosTableName'].OutputValue" --output text)
+          
+          aws ssm put-parameter --name "/photo-blog-app/${ENVIRONMENT}/photos-table" --value "${PHOTOS_TABLE}" --type "String" --overwrite
+
+  deploy-photo-management:
+    name: Deploy Photo Management Service
+    runs-on: ubuntu-latest
+    needs: [deploy-auth-service, deploy-image-processing]
+    if: github.event.inputs.service == 'all' || github.event.inputs.service == 'photo-management' || github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      - uses: aws-actions/setup-sam@v2
+      - uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      # Install dependencies for photo management service
+      - name: Install dependencies
+        run: |
+          cd services/photo-management/src
+          npm ci
+      
+      # Deploy photo management service
+      - name: Build and deploy photo management service
+        run: |
+          cd services/photo-management
+          sam build -t template.yaml
+          sam deploy --stack-name photo-blog-app-photo-management-${ENVIRONMENT} \
+            --parameter-overrides \
+              Environment=${ENVIRONMENT} \
+              ProcessedBucketName=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/processed-bucket" --query "Parameter.Value" --output text) \
+              SharedLayerArn=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/shared-layer" --query "Parameter.Value" --output text) \
+            --capabilities CAPABILITY_IAM \
+            --no-fail-on-empty-changeset
+      
+      # Export API Gateway endpoint to Parameter Store
+      - name: Export API Gateway endpoint
+        run: |
+          API_ENDPOINT=$(aws cloudformation describe-stacks --stack-name photo-blog-app-photo-management-${ENVIRONMENT} --query "Stacks[0].Outputs[?OutputKey=='PhotosApiEndpoint'].OutputValue" --output text)
+          
+          aws ssm put-parameter --name "/photo-blog-app/${ENVIRONMENT}/api-endpoint" --value "${API_ENDPOINT}" --type "String" --overwrite
