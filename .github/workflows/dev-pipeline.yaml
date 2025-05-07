@@ -88,10 +88,10 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
       
       # Install dependencies for auth service
-      - name: Install dependencies
-        run: |
-          cd services/authentication/src
-          npm i
+      # - name: Install dependencies
+      #   run: |
+      #     cd services/authentication/src
+      #     npm i
       
       # Deploy auth service
       - name: Build and deploy auth service
@@ -137,10 +137,10 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
       
       # Install dependencies for image processing service
-      - name: Install dependencies
-        run: |
-          cd services/image-processing/src
-          npm i
+      # - name: Install dependencies
+      #   run: |
+      #     cd services/image-processing/src
+      #     npm i
       
       # Deploy image processing service
       - name: Build and deploy image processing service
@@ -183,10 +183,10 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
       
       # Install dependencies for photo management service
-      - name: Install dependencies
-        run: |
-          cd services/photo-management/src
-          npm i
+      # - name: Install dependencies
+      #   run: |
+      #     cd services/photo-management/src
+      #     npm i
       
       # Deploy photo management service
       - name: Build and deploy photo management service
