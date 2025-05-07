@@ -36,86 +36,86 @@ Resources:
       MessageRetentionPeriod: 1209600  # 14 days
 
   # Lambda to process image (watermark, resize)
-  ImageProcessorFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: src/image-processor/
-      Handler: index.handler
-      Description: Processes uploaded images
-      Timeout: 180
-      MemorySize: 1024
-      Layers:
-        - !Ref SharedLayerArn
-        - !Ref ImageProcessingLayer  # Layer for image processing libraries
-      Environment:
-        Variables:
-          STAGING_BUCKET: !Ref StagingBucket
-          PROCESSED_BUCKET: !Ref ProcessedBucketName
-          PHOTOS_TABLE: !Ref PhotosTable
-          PROCESSING_QUEUE: !Ref ImageProcessingQueue
-      Policies:
-        - S3CrudPolicy:
-            BucketName: !Ref StagingBucket
-        - S3CrudPolicy:
-            BucketName: !Ref ProcessedBucketName
-        - DynamoDBCrudPolicy:
-            TableName: !Ref PhotosTable
-        - SQSPollerPolicy:
-            QueueName: !GetAtt ImageProcessingQueue.QueueName
-        - arn:aws:iam::aws:policy/AmazonSESFullAccess
-      Events:
-        SQSEvent:
-          Type: SQS
-          Properties:
-            Queue: !GetAtt ImageProcessingQueue.Arn
-            BatchSize: 1
+  # ImageProcessorFunction:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     CodeUri: src/image-processor/
+  #     Handler: index.handler
+  #     Description: Processes uploaded images
+  #     Timeout: 180
+  #     MemorySize: 1024
+  #     Layers:
+  #       - !Ref SharedLayerArn
+  #       - !Ref ImageProcessingLayer  # Layer for image processing libraries
+  #     Environment:
+  #       Variables:
+  #         STAGING_BUCKET: !Ref StagingBucket
+  #         PROCESSED_BUCKET: !Ref ProcessedBucketName
+  #         PHOTOS_TABLE: !Ref PhotosTable
+  #         PROCESSING_QUEUE: !Ref ImageProcessingQueue
+  #     Policies:
+  #       - S3CrudPolicy:
+  #           BucketName: !Ref StagingBucket
+  #       - S3CrudPolicy:
+  #           BucketName: !Ref ProcessedBucketName
+  #       - DynamoDBCrudPolicy:
+  #           TableName: !Ref PhotosTable
+  #       - SQSPollerPolicy:
+  #           QueueName: !GetAtt ImageProcessingQueue.QueueName
+  #       - arn:aws:iam::aws:policy/AmazonSESFullAccess
+  #     Events:
+  #       SQSEvent:
+  #         Type: SQS
+  #         Properties:
+  #           Queue: !GetAtt ImageProcessingQueue.Arn
+  #           BatchSize: 1
 
   # Lambda to trigger processing upon upload to staging bucket
-  UploadTriggerFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: src/upload-trigger/
-      Handler: index.handler
-      Description: Triggers image processing when new image is uploaded
-      Layers:
-        - !Ref SharedLayerArn
-      Environment:
-        Variables:
-          PROCESSING_QUEUE: !Ref ImageProcessingQueue
-      Policies:
-        - SQSSendMessagePolicy:
-            QueueName: !GetAtt ImageProcessingQueue.QueueName
-      Events:
-        S3Event:
-          Type: S3
-          Properties:
-            Bucket: !Ref StagingBucket
-            Events: s3:ObjectCreated:*
+  # UploadTriggerFunction:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     CodeUri: src/upload-trigger/
+  #     Handler: index.handler
+  #     Description: Triggers image processing when new image is uploaded
+  #     Layers:
+  #       - !Ref SharedLayerArn
+  #     Environment:
+  #       Variables:
+  #         PROCESSING_QUEUE: !Ref ImageProcessingQueue
+  #     Policies:
+  #       - SQSSendMessagePolicy:
+  #           QueueName: !GetAtt ImageProcessingQueue.QueueName
+  #     Events:
+  #       S3Event:
+  #         Type: S3
+  #         Properties:
+  #           Bucket: !Ref StagingBucket
+  #           Events: s3:ObjectCreated:*
 
   # Lambda to retry failed processing
-  ProcessingRetryFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: src/retry-processor/
-      Handler: index.handler
-      Description: Retries failed image processing tasks
-      Layers:
-        - !Ref SharedLayerArn
-      Environment:
-        Variables:
-          PROCESSING_QUEUE: !Ref ImageProcessingQueue
-          DLQ_URL: !Ref ImageProcessingDLQ
-      Policies:
-        - SQSSendMessagePolicy:
-            QueueName: !GetAtt ImageProcessingQueue.QueueName
-        - SQSPollerPolicy:
-            QueueName: !GetAtt ImageProcessingDLQ.QueueName
-      Events:
-        ScheduledRetry:
-          Type: Schedule
-          Properties:
-            Schedule: rate(5 minutes)
-            Description: Retry failed image processing tasks
+  # ProcessingRetryFunction:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     CodeUri: src/retry-processor/
+  #     Handler: index.handler
+  #     Description: Retries failed image processing tasks
+  #     Layers:
+  #       - !Ref SharedLayerArn
+  #     Environment:
+  #       Variables:
+  #         PROCESSING_QUEUE: !Ref ImageProcessingQueue
+  #         DLQ_URL: !Ref ImageProcessingDLQ
+  #     Policies:
+  #       - SQSSendMessagePolicy:
+  #           QueueName: !GetAtt ImageProcessingQueue.QueueName
+  #       - SQSPollerPolicy:
+  #           QueueName: !GetAtt ImageProcessingDLQ.QueueName
+  #     Events:
+  #       ScheduledRetry:
+  #         Type: Schedule
+  #         Properties:
+  #           Schedule: rate(5 minutes)
+  #           Description: Retry failed image processing tasks
 
   # Photos metadata table
   PhotosTable:
