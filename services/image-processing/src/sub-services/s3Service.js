@@ -1,21 +1,21 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+const { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
+const { s3Client } = require("../config/aws");
 
-const s3 = new S3Client();
 class S3Service {
   bucketName = process.env.BUCKET_NAME;
 
   async uploadFromStagging() {
     const command = new GetObjectCommand({
-      Bucket: "XXXXXX",
-      Key: "key",
+      Bucket: this.bucketName,
+      Key,
     });
-    const { body } = await s3.send(command);
+    const { body } = await s3Client.send(command);
     return body;
   }
 
   async uploadToAssetBucket(watermakedImage, key) {
     const outputKey = `watermarked/${key}`;
-    await s3.send(
+    await s3Client.send(
       new PutObjectCommand({
         Bucket: this.bucketName,
         Key: outputKey,
@@ -29,10 +29,10 @@ class S3Service {
     await s3.send(
       new DeleteObjectCommand({
         Bucket: this.bucketName,
-        Key: key,
+        key,
       })
     );
   }
 }
 
-export const s3Service = new S3Service();
+exports.s3Service = new S3Service();
