@@ -54,7 +54,7 @@ jobs:
         run: |
           sam build -t template.yaml
           sam deploy --stack-name photo-blog-app-${ENVIRONMENT} \
-            --s3-prefix photo-blog-app-dev \
+            --s3-prefix photo-blog-app-dev-main \
             --parameter-overrides Environment=${ENVIRONMENT} DomainName=${DOMAIN_NAME} \
             PrimaryRegion=${AWS_REGION} BackupRegion=${DR_REGION} \
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
@@ -101,7 +101,7 @@ jobs:
           cd services/authentication
           sam build -t template.yaml
           sam deploy --stack-name photo-blog-app-auth-${ENVIRONMENT} \
-            --s3-prefix photo-blog-app-dev \
+            --s3-prefix photo-blog-app-dev-auth \
             --parameter-overrides Environment=${ENVIRONMENT} DomainName=${DOMAIN_NAME} \
             SharedLayerArn=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/shared-layer" --query "Parameter.Value" --output text) \
             --capabilities CAPABILITY_IAM \
@@ -150,7 +150,7 @@ jobs:
           cd services/image-processing
           sam build -t template.yaml
           sam deploy --stack-name photo-blog-app-image-processing-${ENVIRONMENT} \
-            --s3-prefix photo-blog-app-dev \
+            --s3-prefix photo-blog-app-dev-img \
             --parameter-overrides \
               Environment=${ENVIRONMENT} \
               StagingBucketName=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/staging-bucket" --query "Parameter.Value" --output text) \
@@ -195,7 +195,7 @@ jobs:
           cd services/photo-management
           sam build -t template.yaml
           sam deploy --stack-name photo-blog-app-photo-management-${ENVIRONMENT} \
-            --s3-prefix photo-blog-app-dev \
+            --s3-prefix photo-blog-app-dev-pic \
             --parameter-overrides \
               Environment=${ENVIRONMENT} \
               ProcessedBucketName=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/processed-bucket" --query "Parameter.Value" --output text) \
