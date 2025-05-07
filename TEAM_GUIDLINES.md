@@ -13,33 +13,43 @@ Each team member must install:
 
 * **AWS CLI**
 * **AWS SAM CLI**
-* **Node.js (v20 or higher)**
+* **Node.js (v22**
 * **Docker** (for local testing)
 
 Also:
 
 * Use `.env.example` as a reference.
 * Never push personal `.env` files to GitHub.
-* Use `samconfig.toml` with defined environments (`dev`, `test`, `prod`).
+* Use `samconfig.toml` with defined environments (`dev`, `prod`).
 
 ## 3. Project Structure
 
 ```bash
-project-root/
-├── src/
-│   ├── functions/
-│   ├── utils/
-│   ├── middlewares/
-│   └── services/
-├── resources/
-│   ├── cognito.yml
-│   ├── api-gateway.yml
-│   └── step-functions.yml
-├── template.yml
-├── samconfig.toml
-├── .github/workflows/
-├── .env.example
-└── README.md
+Photo-Blog-App/
+├── .github/
+│   └── workflows/
+│       ├── dev-pipeline.yml
+│       └── prod-pipeline.yml
+├── common/
+│   ├── layers/
+│   │   └── nodejs/         # Shared Node.js dependencies
+│   ├── utils/              # Shared utility functions
+│   └── config/             # Shared configuration files
+├── services/
+│   ├── authentication/
+│   │   ├── template.yaml   # SAM template for auth service
+│   │   ├── src/            # Lambda code for auth service
+│   ├── image-processing/
+│   │   ├── template.yaml   # SAM template for image processing
+│   │   ├── src/            # Lambda code for image processing
+│   └── photo-management/
+│       ├── template.yaml   # SAM template for photo management
+│       ├── src/            # Lambda code for photo management
+├── pipeline/
+│   ├── buildspec.yml       # CodeBuild specifications
+│   └── pipeline.yaml       # CloudFormation for CI/CD pipeline
+├── samconfig.toml          # SAM CLI configuration
+└── template.yaml
 ```
 
 * Stick to this structure. Don't create random folders.

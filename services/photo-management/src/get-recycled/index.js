@@ -1,0 +1,1 @@
+// Implement Lambda to get recycled photos

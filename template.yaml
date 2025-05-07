@@ -1,0 +1,162 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Photo Blog Application - Root Stack
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+    Description: Deployment environment
+  DomainName:
+    Type: String
+    Default: dev.mscv2group3.link
+    Description: Domain name for the application
+  PrimaryRegion:
+    Type: String
+    Default: eu-central-1
+    Description: Primary AWS region
+  BackupRegion:
+    Type: String
+    Default: eu-west-1
+    Description: DR backup region
+
+  AdminEmail:
+    Type: String
+    Default: john.kponyo@amalitech.com
+    Description: Administrator email for disaster alert notifications # Notifies the adminstrator of service outage via email.
+
+Globals:
+  Function:
+    Timeout: 30
+    Runtime: nodejs22.x
+    MemorySize: 256
+    Environment:
+      Variables:
+        ENV: !Ref Environment
+        PRIMARY_REGION: !Ref PrimaryRegion
+        DR_REGION: !Ref BackupRegion
+        APP_DOMAIN: !Ref DomainName
+
+Resources:
+  # Shared resources across all services
+  SharedLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: !Sub photo-blog-shared-layer-${Environment}
+      Description: Shared dependencies for photo blog services
+      ContentUri: ./common/layers/nodejs/
+      CompatibleRuntimes:
+        - nodejs22.x
+      RetentionPolicy: Retain
+
+  # Admin SNS DR Topic
+  ServiceOutageNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub ServiceOutageNotificationTopic-${Environment}
+      DisplayName: Service Outage (DR) Notifications
+    
+  # Admin SNS DR Subscription
+  ServiceOutageSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      Endpoint: !Ref AdminEmail
+      TopicArn: !Ref ServiceOutageNotificationTopic
+
+  # Common S3 buckets
+  ProcessedImagesBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub photo-blog-processed-images-${Environment}-${AWS::AccountId}
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, PUT, POST, DELETE, HEAD]
+            AllowedOrigins: [!Sub 'https://${DomainName}'] # Allowing access only from our application's domain
+            MaxAge: 3600
+      VersioningConfiguration:
+        Status: Enabled
+      ReplicationConfiguration:
+        Role: !GetAtt S3ReplicationRole.Arn
+        Rules:
+          - Status: Enabled
+            Destination:
+              Bucket: !Sub 'arn:aws:s3:::photo-blog-dr-${Environment}-${AWS::AccountId}'
+              StorageClass: STANDARD
+
+  # DR Backup bucket in secondary region
+  StagingBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub photo-blog-staging-${Environment}-${AWS::AccountId}
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldFiles
+            Status: Enabled
+            ExpirationInDays: 1
+
+  # S3 Replication IAM role
+  S3ReplicationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+
+  # Nested stacks for each service
+  AuthServiceStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: ./services/authentication/template.yaml
+      Parameters:
+        Environment: !Ref Environment
+        DomainName: !Ref DomainName
+        SharedLayerArn: !Ref SharedLayer
+
+  ImageProcessingStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: ./services/image-processing/template.yaml
+      Parameters:
+        Environment: !Ref Environment
+        StagingBucketName: !Ref StagingBucket
+        ProcessedBucketName: !Ref ProcessedImagesBucket
+        SharedLayerArn: !Ref SharedLayer
+
+  PhotoManagementStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: ./services/photo-management/template.yaml
+      Parameters:
+        Environment: !Ref Environment
+        ProcessedBucketName: !Ref ProcessedImagesBucket
+        SharedLayerArn: !Ref SharedLayer
+
+Outputs:
+  ProcessedImagesBucketName:
+    Description: S3 bucket for processed images
+    Value: !Ref ProcessedImagesBucket
+    Export:
+      Name: !Sub ${AWS::StackName}-ProcessedImagesBucket
+  
+  StagingBucketName:
+    Description: S3 bucket for image staging
+    Value: !Ref StagingBucket
+    Export:
+      Name: !Sub ${AWS::StackName}-StagingBucket
+  
+  SharedLayerArn:
+    Description: ARN of the shared Lambda layer
+    Value: !Ref SharedLayer
+    Export:
+      Name: !Sub ${AWS::StackName}-SharedLayer
