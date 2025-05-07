@@ -32,7 +32,6 @@ class DynamoService {
         return docClient.send(command);
     }
 
-
     static async deleteImageMetadata(imageId) {
         const command = new DeleteCommand({
             TableName: TABLE_NAME,
