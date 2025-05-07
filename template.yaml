@@ -129,7 +129,7 @@ Resources:
       TemplateURL: ./services/image-processing/template.yaml
       Parameters:
         Environment: !Ref Environment
-        StagingBucketName: !Ref StagingBucket
+        # StagingBucketName: !Ref StagingBucket
         ProcessedBucketName: !Ref ProcessedImagesBucket
         SharedLayerArn: !Ref SharedLayer
 
