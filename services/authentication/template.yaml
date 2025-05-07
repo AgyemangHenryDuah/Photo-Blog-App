@@ -28,7 +28,7 @@ Resources:
         - email
       EmailConfiguration:
         EmailSendingAccount: DEVELOPER
-        SourceArn: !Ref EmailIdentity
+        SourceArn: !Sub arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/noreply@${DomainName}
       Schema:
         - Name: email
           AttributeDataType: String
