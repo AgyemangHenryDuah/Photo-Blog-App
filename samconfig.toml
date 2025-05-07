@@ -18,7 +18,7 @@ parameter_overrides = "Environment=\"dev\" DomainName=\"dev.mscv2group3.link\" P
 stack_name = "photo-blog-app-prod"
 confirm_changeset = true
 resolve_s3 = true
-s3_prefix = "photo-blog-prod"
+s3_prefix = "photo-blog-app-prod"
 region = "eu-central-1"
 cached = true
 parallel = true

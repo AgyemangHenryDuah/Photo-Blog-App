@@ -54,6 +54,7 @@ jobs:
         run: |
           sam build -t template.yaml
           sam deploy --stack-name photo-blog-app-${ENVIRONMENT} \
+            --s3-prefix photo-blog-app-dev \
             --parameter-overrides Environment=${ENVIRONMENT} DomainName=${DOMAIN_NAME} \
             PrimaryRegion=${AWS_REGION} BackupRegion=${DR_REGION} \
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
@@ -100,6 +101,7 @@ jobs:
           cd services/authentication
           sam build -t template.yaml
           sam deploy --stack-name photo-blog-app-auth-${ENVIRONMENT} \
+            --s3-prefix photo-blog-app-dev \
             --parameter-overrides Environment=${ENVIRONMENT} DomainName=${DOMAIN_NAME} \
             SharedLayerArn=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/shared-layer" --query "Parameter.Value" --output text) \
             --capabilities CAPABILITY_IAM \
@@ -111,10 +113,13 @@ jobs:
           USER_POOL_ID=$(aws cloudformation describe-stacks --stack-name photo-blog-app-auth-${ENVIRONMENT} --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text)
           USER_POOL_CLIENT=$(aws cloudformation describe-stacks --stack-name photo-blog-app-auth-${ENVIRONMENT} --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" --output text)
           USER_POOL_ARN=$(aws cognito-idp describe-user-pool --user-pool-id ${USER_POOL_ID} --query "UserPool.Arn" --output text)
+          AUTH_API_ENDPOINT=$(aws cloudformation describe-stacks --stack-name photo-blog-app-auth-${ENVIRONMENT} --query "Stacks[0].Outputs[?OutputKey=='ApiGatewayUrl'].OutputValue" --output text)
           
           aws ssm put-parameter --name "/photo-blog-app/${ENVIRONMENT}/user-pool-id" --value "${USER_POOL_ID}" --type "String" --overwrite
           aws ssm put-parameter --name "/photo-blog-app/${ENVIRONMENT}/user-pool-client-id" --value "${USER_POOL_CLIENT}" --type "String" --overwrite
           aws ssm put-parameter --name "/photo-blog-app/${ENVIRONMENT}/user-pool-arn" --value "${USER_POOL_ARN}" --type "String" --overwrite
+          aws ssm put-parameter --name "/photo-blog-app/${ENVIRONMENT}/auth-api-endpoint" --value "${AUTH_API_ENDPOINT}" --type "String" --overwrite
+
 
   deploy-image-processing:
     name: Deploy Image Processing Service
@@ -145,6 +150,7 @@ jobs:
           cd services/image-processing
           sam build -t template.yaml
           sam deploy --stack-name photo-blog-app-image-processing-${ENVIRONMENT} \
+            --s3-prefix photo-blog-app-dev \
             --parameter-overrides \
               Environment=${ENVIRONMENT} \
               StagingBucketName=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/staging-bucket" --query "Parameter.Value" --output text) \
@@ -189,6 +195,7 @@ jobs:
           cd services/photo-management
           sam build -t template.yaml
           sam deploy --stack-name photo-blog-app-photo-management-${ENVIRONMENT} \
+            --s3-prefix photo-blog-app-dev \
             --parameter-overrides \
               Environment=${ENVIRONMENT} \
               ProcessedBucketName=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/processed-bucket" --query "Parameter.Value" --output text) \
