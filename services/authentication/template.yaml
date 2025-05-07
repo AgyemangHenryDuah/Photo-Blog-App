@@ -43,7 +43,6 @@ Resources:
       # Enable password recovery and MFA for security
       AdminCreateUserConfig:
         AllowAdminCreateUserOnly: false
-      MfaConfiguration: OPTIONAL
       AccountRecoverySetting:
         RecoveryMechanisms:
           - Name: verified_email
