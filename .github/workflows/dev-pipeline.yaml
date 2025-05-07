@@ -54,10 +54,11 @@ jobs:
         run: |
           sam build -t template.yaml
           sam deploy --stack-name photo-blog-app-${ENVIRONMENT} \
+            --resolve-s3 \
             --parameter-overrides Environment=${ENVIRONMENT} DomainName=${DOMAIN_NAME} \
             PrimaryRegion=${AWS_REGION} BackupRegion=${DR_REGION} \
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
-            --no-fail-on-empty-changeset
+            --no-fail-on-empty-changeset 
       
       # Export shared resources to Parameter Store
       - name: Export shared resources
@@ -98,6 +99,7 @@ jobs:
           cd services/authentication
           sam build -t template.yaml
           sam deploy --stack-name photo-blog-app-auth-${ENVIRONMENT} \
+            --resolve-s3 \
             --parameter-overrides Environment=${ENVIRONMENT} DomainName=${DOMAIN_NAME} \
             SharedLayerArn=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/shared-layer" --query "Parameter.Value" --output text) \
             --capabilities CAPABILITY_IAM \
@@ -146,6 +148,7 @@ jobs:
           cd services/image-processing
           sam build -t template.yaml
           sam deploy --stack-name photo-blog-app-image-processing-${ENVIRONMENT} \
+            --resolve-s3 \
             --parameter-overrides \
               Environment=${ENVIRONMENT} \
               ProcessedBucketName=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/processed-bucket" --query "Parameter.Value" --output text) \
@@ -191,6 +194,7 @@ jobs:
           cd services/photo-management
           sam build -t template.yaml
           sam deploy --stack-name photo-blog-app-photo-management-${ENVIRONMENT} \
+            --resolve-s3 \
             --parameter-overrides \
               Environment=${ENVIRONMENT} \
               ProcessedBucketName=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/processed-bucket" --query "Parameter.Value" --output text) \
