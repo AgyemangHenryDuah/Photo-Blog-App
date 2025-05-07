@@ -73,6 +73,13 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub photo-blog-app-dr-${Environment}-${AWS::AccountId}
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 30 # Will be adjusted later...
 
   ProcessedImagesBucket:
     Type: AWS::S3::Bucket
@@ -120,33 +127,33 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonS3FullAccess
 
   # Nested stacks for each service
-  AuthServiceStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      TemplateURL: ./services/authentication/template.yaml
-      Parameters:
-        Environment: !Ref Environment
-        DomainName: !Ref DomainName
-        SharedLayerArn: !Ref SharedLayer
+  # AuthServiceStack:
+  #   Type: AWS::CloudFormation::Stack
+  #   Properties:
+  #     TemplateURL: ./services/authentication/template.yaml
+  #     Parameters:
+  #       Environment: !Ref Environment
+  #       DomainName: !Ref DomainName
+  #       SharedLayerArn: !Ref SharedLayer
 
-  ImageProcessingStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      TemplateURL: ./services/image-processing/template.yaml
-      Parameters:
-        Environment: !Ref Environment
-        # StagingBucketName: !Ref StagingBucket
-        ProcessedBucketName: !Ref ProcessedImagesBucket
-        SharedLayerArn: !Ref SharedLayer
+  # ImageProcessingStack:
+  #   Type: AWS::CloudFormation::Stack
+  #   Properties:
+  #     TemplateURL: ./services/image-processing/template.yaml
+  #     Parameters:
+  #       Environment: !Ref Environment
+  #       # StagingBucketName: !Ref StagingBucket
+  #       ProcessedBucketName: !Ref ProcessedImagesBucket
+  #       SharedLayerArn: !Ref SharedLayer
 
-  PhotoManagementStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      TemplateURL: ./services/photo-management/template.yaml
-      Parameters:
-        Environment: !Ref Environment
-        ProcessedBucketName: !Ref ProcessedImagesBucket
-        SharedLayerArn: !Ref SharedLayer
+  # PhotoManagementStack:
+  #   Type: AWS::CloudFormation::Stack
+  #   Properties:
+  #     TemplateURL: ./services/photo-management/template.yaml
+  #     Parameters:
+  #       Environment: !Ref Environment
+  #       ProcessedBucketName: !Ref ProcessedImagesBucket
+  #       SharedLayerArn: !Ref SharedLayer
 
 Outputs:
   ProcessedImagesBucketName:
