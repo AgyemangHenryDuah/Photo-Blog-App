@@ -39,6 +39,14 @@ class DynamoService {
         });
         return docClient.send(command);
     }
+
+    static async getUserEmail(userID) {
+        const command = new GetCommand({
+            TableName: TABLE_NAME,
+            Key: { userID }
+        });
+        return docClient.send(command);
+    }
 }
 
 module.exports = DynamoService;
