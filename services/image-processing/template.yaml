@@ -6,12 +6,16 @@ Parameters:
   Environment:
     Type: String
     Default: dev
-  StagingBucketName:
-    Type: String
+  # StagingBucketName:
+  #   Type: String
   ProcessedBucketName:
     Type: String
   SharedLayerArn:
     Type: String
+
+Globals:
+  Function:
+    Runtime: nodejs22.x
 
 Resources:
   # SQS Queue for image processing
@@ -45,20 +49,20 @@ Resources:
         - !Ref ImageProcessingLayer  # Layer for image processing libraries
       Environment:
         Variables:
-          STAGING_BUCKET: !Ref StagingBucketName
+          STAGING_BUCKET: !Ref StagingBucket
           PROCESSED_BUCKET: !Ref ProcessedBucketName
           PHOTOS_TABLE: !Ref PhotosTable
           PROCESSING_QUEUE: !Ref ImageProcessingQueue
       Policies:
         - S3CrudPolicy:
-            BucketName: !Ref StagingBucketName
+            BucketName: !Ref StagingBucket
         - S3CrudPolicy:
             BucketName: !Ref ProcessedBucketName
         - DynamoDBCrudPolicy:
             TableName: !Ref PhotosTable
         - SQSPollerPolicy:
             QueueName: !GetAtt ImageProcessingQueue.QueueName
-        - SESFullAccess
+        - arn:aws:iam::aws:policy/AmazonSESFullAccess
       Events:
         SQSEvent:
           Type: SQS
@@ -85,7 +89,7 @@ Resources:
         S3Event:
           Type: S3
           Properties:
-            Bucket: !Ref StagingBucketArn
+            Bucket: !Ref StagingBucket
             Events: s3:ObjectCreated:*
 
   # Lambda to retry failed processing
@@ -137,10 +141,10 @@ Resources:
           Projection:
             ProjectionType: ALL
       # DR Replication to backup region
-      GlobalTableConfiguration:
-        ReplicationGroup:
-          - Region: !Ref AWS::Region
-          - Region: !Sub '{{resolve:ssm:/photo-blog/${Environment}/dr-region}}'
+      # GlobalTableConfiguration:
+      #   ReplicationGroup:
+      #     - Region: !Ref AWS::Region
+      #     - Region: !Sub '{{resolve:ssm:/photo-blog/${Environment}/dr-region}}'
 
   # Layer for image processing libraries (Sharp)
   ImageProcessingLayer:
@@ -153,11 +157,18 @@ Resources:
         - nodejs22.x
       RetentionPolicy: Retain
 
-  # Set up staging bucket trigger permissions
-  StagingBucketArn:
-    Type: String
-    Default: !Sub 'arn:aws:s3:::${StagingBucketName}'
+  # DR Backup bucket in secondary region
+  StagingBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub photo-blog-staging-${Environment}-${AWS::AccountId}
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldFiles
+            Status: Enabled
+            ExpirationInDays: 1
 
+  # Set up staging bucket trigger permissions
   StagingBucketPermission:
     Type: AWS::Lambda::Permission
     Properties:
@@ -165,7 +176,7 @@ Resources:
       FunctionName: !Ref UploadTriggerFunction
       Principal: s3.amazonaws.com
       SourceAccount: !Ref AWS::AccountId
-      SourceArn: !Sub 'arn:aws:s3:::${StagingBucketName}'
+      SourceArn: !Sub 'arn:aws:s3:::${StagingBucket}'
 
 Outputs:
   PhotosTableName:
@@ -179,3 +190,9 @@ Outputs:
     Value: !Ref ImageProcessingQueue
     Export:
       Name: !Sub ${AWS::StackName}-ProcessingQueue
+
+  StagingBucketName:
+    Description: S3 bucket for image staging
+    Value: !Ref StagingBucket
+    Export:
+      Name: !Sub ${AWS::StackName}-StagingBucket

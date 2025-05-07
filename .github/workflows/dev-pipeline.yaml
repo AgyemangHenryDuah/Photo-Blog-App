@@ -54,7 +54,6 @@ jobs:
         run: |
           sam build -t template.yaml
           sam deploy --stack-name photo-blog-app-${ENVIRONMENT} \
-            --s3-prefix photo-blog-app-dev-main \
             --parameter-overrides Environment=${ENVIRONMENT} DomainName=${DOMAIN_NAME} \
             PrimaryRegion=${AWS_REGION} BackupRegion=${DR_REGION} \
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
@@ -64,11 +63,9 @@ jobs:
       - name: Export shared resources
         run: |
           # Get stack outputs and store in Parameter Store for cross-stack references
-          STAGING_BUCKET=$(aws cloudformation describe-stacks --stack-name photo-blog-app-${ENVIRONMENT} --query "Stacks[0].Outputs[?OutputKey=='StagingBucketName'].OutputValue" --output text)
           PROCESSED_BUCKET=$(aws cloudformation describe-stacks --stack-name photo-blog-app-${ENVIRONMENT} --query "Stacks[0].Outputs[?OutputKey=='ProcessedImagesBucketName'].OutputValue" --output text)
           SHARED_LAYER=$(aws cloudformation describe-stacks --stack-name photo-blog-app-${ENVIRONMENT} --query "Stacks[0].Outputs[?OutputKey=='SharedLayerArn'].OutputValue" --output text)
           
-          aws ssm put-parameter --name "/photo-blog-app/${ENVIRONMENT}/staging-bucket" --value "${STAGING_BUCKET}" --type "String" --overwrite
           aws ssm put-parameter --name "/photo-blog-app/${ENVIRONMENT}/processed-bucket" --value "${PROCESSED_BUCKET}" --type "String" --overwrite
           aws ssm put-parameter --name "/photo-blog-app/${ENVIRONMENT}/shared-layer" --value "${SHARED_LAYER}" --type "String" --overwrite
 
@@ -101,7 +98,6 @@ jobs:
           cd services/authentication
           sam build -t template.yaml
           sam deploy --stack-name photo-blog-app-auth-${ENVIRONMENT} \
-            --s3-prefix photo-blog-app-dev-auth \
             --parameter-overrides Environment=${ENVIRONMENT} DomainName=${DOMAIN_NAME} \
             SharedLayerArn=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/shared-layer" --query "Parameter.Value" --output text) \
             --capabilities CAPABILITY_IAM \
@@ -150,10 +146,8 @@ jobs:
           cd services/image-processing
           sam build -t template.yaml
           sam deploy --stack-name photo-blog-app-image-processing-${ENVIRONMENT} \
-            --s3-prefix photo-blog-app-dev-img \
             --parameter-overrides \
               Environment=${ENVIRONMENT} \
-              StagingBucketName=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/staging-bucket" --query "Parameter.Value" --output text) \
               ProcessedBucketName=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/processed-bucket" --query "Parameter.Value" --output text) \
               SharedLayerArn=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/shared-layer" --query "Parameter.Value" --output text) \
             --capabilities CAPABILITY_IAM \
@@ -163,8 +157,10 @@ jobs:
       - name: Export image processing resources
         run: |
           PHOTOS_TABLE=$(aws cloudformation describe-stacks --stack-name photo-blog-app-image-processing-${ENVIRONMENT} --query "Stacks[0].Outputs[?OutputKey=='PhotosTableName'].OutputValue" --output text)
+          STAGING_BUCKET=$(aws cloudformation describe-stacks --stack-name photo-blog-app-image-processing-${ENVIRONMENT} --query "Stacks[0].Outputs[?OutputKey=='StagingBucketName'].OutputValue" --output text)
           
           aws ssm put-parameter --name "/photo-blog-app/${ENVIRONMENT}/photos-table" --value "${PHOTOS_TABLE}" --type "String" --overwrite
+          aws ssm put-parameter --name "/photo-blog-app/${ENVIRONMENT}/staging-bucket" --value "${STAGING_BUCKET}" --type "String" --overwrite
 
   deploy-photo-management:
     name: Deploy Photo Management Service
@@ -195,7 +191,6 @@ jobs:
           cd services/photo-management
           sam build -t template.yaml
           sam deploy --stack-name photo-blog-app-photo-management-${ENVIRONMENT} \
-            --s3-prefix photo-blog-app-dev-pic \
             --parameter-overrides \
               Environment=${ENVIRONMENT} \
               ProcessedBucketName=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/processed-bucket" --query "Parameter.Value" --output text) \

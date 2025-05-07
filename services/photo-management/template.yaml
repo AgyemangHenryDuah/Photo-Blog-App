@@ -11,6 +11,10 @@ Parameters:
   SharedLayerArn:
     Type: String
 
+Globals:
+  Function:
+    Runtime: nodejs22.x
+
 Resources:
   # API Gateway
   PhotosApi:
@@ -231,10 +235,10 @@ Resources:
         AttributeName: expiresAt
         Enabled: true
       # DR Replication to backup region
-      GlobalTableConfiguration:
-        ReplicationGroup:
-          - Region: !Ref AWS::Region
-          - Region: !Sub '{{resolve:ssm:/photo-blog/${Environment}/dr-region}}'
+      # GlobalTableConfiguration:
+      #   ReplicationGroup:
+      #     - Region: !Ref AWS::Region
+      #     - Region: !Sub '{{resolve:ssm:/photo-blog/${Environment}/dr-region}}'
 
 Outputs:
   PhotosApiEndpoint:

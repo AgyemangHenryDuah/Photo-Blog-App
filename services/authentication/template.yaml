@@ -12,6 +12,10 @@ Parameters:
     Type: String
     Description: ARN of shared Lambda layer
 
+Globals:
+  Function:
+    Runtime: nodejs22.x
+
 Resources:
   # Cognito User Pool
   UserPool:
@@ -24,7 +28,7 @@ Resources:
         - email
       EmailConfiguration:
         EmailSendingAccount: DEVELOPER
-        SourceArn: !GetAtt EmailIdentity.IdentityArn
+        SourceArn: !Ref EmailIdentity
       Schema:
         - Name: email
           AttributeDataType: String
@@ -92,12 +96,7 @@ Resources:
         Variables:
           USERS_TABLE: !Ref UsersTable
           FROM_EMAIL: !Sub noreply@${DomainName}
-      Events:
-        CognitoTrigger:
-          Type: Cognito
-          Properties:
-            UserPool: !Ref UserPool
-            Trigger: PostConfirmation
+
 
   # Users Database
   UsersTable:
@@ -114,10 +113,10 @@ Resources:
       StreamSpecification:
         StreamViewType: NEW_AND_OLD_IMAGES
       # DR Replication to backup region
-      GlobalTableConfiguration:
-        ReplicationGroup:
-          - Region: !Ref AWS::Region
-          - Region: !Sub '{{resolve:ssm:/photo-blog/${Environment}/dr-region}}'
+      # GlobalTableConfiguration:
+      #   ReplicationGroup:
+      #     - Region: !Ref AWS::Region
+      #     - Region: !Sub '{{resolve:ssm:/photo-blog/${Environment}/dr-region}}'
 
   # Lambda for Cognito backup (daily snapshot)
   CognitoBackupFunction:
@@ -155,10 +154,10 @@ Resources:
         - AttributeName: userId
           KeyType: HASH
       # DR Replication to backup region
-      GlobalTableConfiguration:
-        ReplicationGroup:
-          - Region: !Ref AWS::Region
-          - Region: !Sub '{{resolve:ssm:/photo-blog/${Environment}/dr-region}}'
+      # GlobalTableConfiguration:
+      #   ReplicationGroup:
+      #     - Region: !Ref AWS::Region
+      #     - Region: !Sub '{{resolve:ssm:/photo-blog/${Environment}/dr-region}}'
 
   # API Gateway
   AuthApiGateway:

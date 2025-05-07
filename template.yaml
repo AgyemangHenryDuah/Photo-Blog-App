@@ -88,16 +88,16 @@ Resources:
               Bucket: !Sub 'arn:aws:s3:::photo-blog-dr-${Environment}-${AWS::AccountId}'
               StorageClass: STANDARD
 
-  # DR Backup bucket in secondary region
-  StagingBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub photo-blog-staging-${Environment}-${AWS::AccountId}
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldFiles
-            Status: Enabled
-            ExpirationInDays: 1
+  # # DR Backup bucket in secondary region
+  # StagingBucket:
+  #   Type: AWS::S3::Bucket
+  #   Properties:
+  #     BucketName: !Sub photo-blog-staging-${Environment}-${AWS::AccountId}
+  #     LifecycleConfiguration:
+  #       Rules:
+  #         - Id: DeleteOldFiles
+  #           Status: Enabled
+  #           ExpirationInDays: 1
 
   # S3 Replication IAM role
   S3ReplicationRole:
@@ -149,11 +149,11 @@ Outputs:
     Export:
       Name: !Sub ${AWS::StackName}-ProcessedImagesBucket
   
-  StagingBucketName:
-    Description: S3 bucket for image staging
-    Value: !Ref StagingBucket
-    Export:
-      Name: !Sub ${AWS::StackName}-StagingBucket
+  # StagingBucketName:
+  #   Description: S3 bucket for image staging
+  #   Value: !Ref StagingBucket
+  #   Export:
+  #     Name: !Sub ${AWS::StackName}-StagingBucket
   
   SharedLayerArn:
     Description: ARN of the shared Lambda layer

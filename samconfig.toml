@@ -9,7 +9,6 @@ s3_prefix = "photo-blog-app"
 region = "eu-central-1"
 cached = true
 parallel = true
-s3_prefix = "photo-blog-app-dev"
 capabilities = "CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND"
 parameter_overrides = "Environment=\"dev\" DomainName=\"dev.mscv2group3.link\" PrimaryRegion=\"eu-central-1\" BackupRegion=\"eu-west-1\""
 
@@ -22,6 +21,5 @@ s3_prefix = "photo-blog-app-prod"
 region = "eu-central-1"
 cached = true
 parallel = true
-s3_prefix = "photo-blog-app-prod"
 capabilities = "CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND"
 parameter_overrides = "Environment=\"prod\" DomainName=\"mscv2group3.link\" PrimaryRegion=\"eu-central-1\" BackupRegion=\"eu-west-1\""
