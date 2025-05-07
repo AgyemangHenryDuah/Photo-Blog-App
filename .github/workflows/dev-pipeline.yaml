@@ -38,6 +38,12 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
       
+      # Install dependencies for shared layer
+      - name: Install shared layer dependencies
+        run: |
+          cd common/layers/nodejs
+          npm ci
+      
       # Store DR region in Parameter Store
       - name: Set DR Region Parameter
         run: |
@@ -85,9 +91,9 @@ jobs:
       # Install dependencies for auth service
       - name: Install dependencies
         run: |
-          cd services/auth-service/src
+          cd services/authentication/src
           npm ci
-
+      
       # Deploy auth service
       - name: Build and deploy auth service
         run: |
@@ -131,8 +137,6 @@ jobs:
       - name: Install dependencies
         run: |
           cd services/image-processing/src
-          npm ci
-          cd ../../../common/layers/image-processing/nodejs
           npm ci
       
       # Deploy image processing service
@@ -189,6 +193,8 @@ jobs:
               Environment=${ENVIRONMENT} \
               ProcessedBucketName=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/processed-bucket" --query "Parameter.Value" --output text) \
               SharedLayerArn=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/shared-layer" --query "Parameter.Value" --output text) \
+              PhotosTableName=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/photos-table" --query "Parameter.Value" --output text) \
+              UserPoolArn=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/user-pool-arn" --query "Parameter.Value" --output text) \
             --capabilities CAPABILITY_IAM \
             --no-fail-on-empty-changeset
       
