@@ -3,179 +3,203 @@ Transform: AWS::Serverless-2016-10-31
 Description: Photo Blog - Image Processing Service
 
 Parameters:
-  Environment:
-    Type: String
-    Default: dev
-  StagingBucketName:
-    Type: String
-  ProcessedBucketName:
-    Type: String
-  SharedLayerArn:
-    Type: String
+    Environment:
+        Type: String
+        Default: dev
+    StagingBucketName:
+        Type: String
+    ProcessedBucketName:
+        Type: String
+    SharedLayerArn:
+        Type: String
 
 Resources:
-  # SQS Queue for image processing
-  ImageProcessingQueue:
-    Type: AWS::SQS::Queue
-    Properties:
-      QueueName: !Sub photo-blog-image-processing-${Environment}
-      VisibilityTimeout: 300  # 5 minutes
-      RedrivePolicy:
-        deadLetterTargetArn: !GetAtt ImageProcessingDLQ.Arn
-        maxReceiveCount: 3
+    # SQS Queue for image processing
+    ImageProcessingQueue:
+        Type: AWS::SQS::Queue
+        Properties:
+            QueueName: !Sub photo-blog-image-processing-${Environment}
+            VisibilityTimeout: 300 # 5 minutes
+            RedrivePolicy:
+                deadLetterTargetArn: !GetAtt ImageProcessingDLQ.Arn
+                maxReceiveCount: 3
 
-  # Dead Letter Queue for failed processing
-  ImageProcessingDLQ:
-    Type: AWS::SQS::Queue
-    Properties:
-      QueueName: !Sub photo-blog-image-processing-dlq-${Environment}
-      MessageRetentionPeriod: 1209600  # 14 days
+    # Dead Letter Queue for failed processing
+    ImageProcessingDLQ:
+        Type: AWS::SQS::Queue
+        Properties:
+            QueueName: !Sub photo-blog-image-processing-dlq-${Environment}
+            MessageRetentionPeriod: 1209600 # 14 days
 
-  # Lambda to process image (watermark, resize)
-  ImageProcessorFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: src/image-processor/
-      Handler: index.handler
-      Description: Processes uploaded images
-      Timeout: 180
-      MemorySize: 1024
-      Layers:
-        - !Ref SharedLayerArn
-        - !Ref ImageProcessingLayer  # Layer for image processing libraries
-      Environment:
-        Variables:
-          STAGING_BUCKET: !Ref StagingBucketName
-          PROCESSED_BUCKET: !Ref ProcessedBucketName
-          PHOTOS_TABLE: !Ref PhotosTable
-          PROCESSING_QUEUE: !Ref ImageProcessingQueue
-      Policies:
-        - S3CrudPolicy:
-            BucketName: !Ref StagingBucketName
-        - S3CrudPolicy:
-            BucketName: !Ref ProcessedBucketName
-        - DynamoDBCrudPolicy:
-            TableName: !Ref PhotosTable
-        - SQSPollerPolicy:
-            QueueName: !GetAtt ImageProcessingQueue.QueueName
-        - SESFullAccess
-      Events:
-        SQSEvent:
-          Type: SQS
-          Properties:
-            Queue: !GetAtt ImageProcessingQueue.Arn
-            BatchSize: 1
+    # Lambda to process image (watermark, resize)
+    ImageProcessorFunction:
+        Type: AWS::Serverless::Function
+        Metadata:
+            BuildMethod: esbuild
+            BuildProperties:
+                Minify: true
+                Target: es2020
+                SourceMap: true
+                EntryPoints:
+                    - src/image-processor/index.ts
+        Properties:
+            CodeUri: src/image-processor/
+            Handler: index.handler
+            Description: Processes uploaded images
+            Timeout: 180
+            MemorySize: 1024
+            Layers:
+                - !Ref SharedLayerArn
+                - !Ref ImageProcessingLayer # Layer for image processing libraries
+            Environment:
+                Variables:
+                    STAGING_BUCKET: !Ref StagingBucketName
+                    PROCESSED_BUCKET: !Ref ProcessedBucketName
+                    PHOTOS_TABLE: !Ref PhotosTable
+                    PROCESSING_QUEUE: !Ref ImageProcessingQueue
+            Policies:
+                - S3CrudPolicy:
+                      BucketName: !Ref StagingBucketName
+                - S3CrudPolicy:
+                      BucketName: !Ref ProcessedBucketName
+                - DynamoDBCrudPolicy:
+                      TableName: !Ref PhotosTable
+                - SQSPollerPolicy:
+                      QueueName: !GetAtt ImageProcessingQueue.QueueName
+                - SESFullAccess
+            Events:
+                SQSEvent:
+                    Type: SQS
+                    Properties:
+                        Queue: !GetAtt ImageProcessingQueue.Arn
+                        BatchSize: 1
 
-  # Lambda to trigger processing upon upload to staging bucket
-  UploadTriggerFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: src/upload-trigger/
-      Handler: index.handler
-      Description: Triggers image processing when new image is uploaded
-      Layers:
-        - !Ref SharedLayerArn
-      Environment:
-        Variables:
-          PROCESSING_QUEUE: !Ref ImageProcessingQueue
-      Policies:
-        - SQSSendMessagePolicy:
-            QueueName: !GetAtt ImageProcessingQueue.QueueName
-      Events:
-        S3Event:
-          Type: S3
-          Properties:
-            Bucket: !Ref StagingBucketArn
-            Events: s3:ObjectCreated:*
+    # Lambda to trigger processing upon upload to staging bucket
+    UploadTriggerFunction:
+        Type: AWS::Serverless::Function
+        Metadata:
+            BuildMethod: esbuild
+            BuildProperties:
+                Minify: true
+                Target: es2020
+                SourceMap: true
+                EntryPoints:
+                    - src/upload-trigger/index.ts
+        Properties:
+            CodeUri: src/upload-trigger/
+            Handler: index.handler
+            Description: Triggers image processing when new image is uploaded
+            Layers:
+                - !Ref SharedLayerArn
+            Environment:
+                Variables:
+                    PROCESSING_QUEUE: !Ref ImageProcessingQueue
+            Policies:
+                - SQSSendMessagePolicy:
+                      QueueName: !GetAtt ImageProcessingQueue.QueueName
+            Events:
+                S3Event:
+                    Type: S3
+                    Properties:
+                        Bucket: !Ref StagingBucketArn
+                        Events: s3:ObjectCreated:*
 
-  # Lambda to retry failed processing
-  ProcessingRetryFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: src/retry-processor/
-      Handler: index.handler
-      Description: Retries failed image processing tasks
-      Layers:
-        - !Ref SharedLayerArn
-      Environment:
-        Variables:
-          PROCESSING_QUEUE: !Ref ImageProcessingQueue
-          DLQ_URL: !Ref ImageProcessingDLQ
-      Policies:
-        - SQSSendMessagePolicy:
-            QueueName: !GetAtt ImageProcessingQueue.QueueName
-        - SQSPollerPolicy:
-            QueueName: !GetAtt ImageProcessingDLQ.QueueName
-      Events:
-        ScheduledRetry:
-          Type: Schedule
-          Properties:
-            Schedule: rate(5 minutes)
-            Description: Retry failed image processing tasks
+    # Lambda to retry failed processing
+    ProcessingRetryFunction:
+        Type: AWS::Serverless::Function
+        Metadata:
+            BuildMethod: esbuild
+            BuildProperties:
+                Minify: true
+                Target: es2020
+                SourceMap: true
+                EntryPoints:
+                    - src/retry-processor/index.ts
+        Properties:
+            CodeUri: src/retry-processor/
+            Handler: index.handler
+            Description: Retries failed image processing tasks
+            Layers:
+                - !Ref SharedLayerArn
+            Environment:
+                Variables:
+                    PROCESSING_QUEUE: !Ref ImageProcessingQueue
+                    DLQ_URL: !Ref ImageProcessingDLQ
+            Policies:
+                - SQSSendMessagePolicy:
+                      QueueName: !GetAtt ImageProcessingQueue.QueueName
+                - SQSPollerPolicy:
+                      QueueName: !GetAtt ImageProcessingDLQ.QueueName
+            Events:
+                ScheduledRetry:
+                    Type: Schedule
+                    Properties:
+                        Schedule: rate(5 minutes)
+                        Description: Retry failed image processing tasks
 
-  # Photos metadata table
-  PhotosTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      TableName: !Sub photo-blog-photos-${Environment}
-      BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-        - AttributeName: userId
-          AttributeType: S
-        - AttributeName: photoId
-          AttributeType: S
-      KeySchema:
-        - AttributeName: userId
-          KeyType: HASH
-        - AttributeName: photoId
-          KeyType: RANGE
-      GlobalSecondaryIndexes:
-        - IndexName: PhotosByStatus
-          KeySchema:
-            - AttributeName: photoId
-              KeyType: HASH
-          Projection:
-            ProjectionType: ALL
-      # DR Replication to backup region
-      GlobalTableConfiguration:
-        ReplicationGroup:
-          - Region: !Ref AWS::Region
-          - Region: !Sub '{{resolve:ssm:/photo-blog/${Environment}/dr-region}}'
+    # Photos metadata table
+    PhotosTable:
+        Type: AWS::DynamoDB::Table
+        Properties:
+            TableName: !Sub photo-blog-photos-${Environment}
+            BillingMode: PAY_PER_REQUEST
+            AttributeDefinitions:
+                - AttributeName: userId
+                  AttributeType: S
+                - AttributeName: photoId
+                  AttributeType: S
+            KeySchema:
+                - AttributeName: userId
+                  KeyType: HASH
+                - AttributeName: photoId
+                  KeyType: RANGE
+            GlobalSecondaryIndexes:
+                - IndexName: PhotosByStatus
+                  KeySchema:
+                      - AttributeName: photoId
+                        KeyType: HASH
+                  Projection:
+                      ProjectionType: ALL
+            # DR Replication to backup region
+            GlobalTableConfiguration:
+                ReplicationGroup:
+                    - Region: !Ref AWS::Region
+                    - Region: !Sub '{{resolve:ssm:/photo-blog/${Environment}/dr-region}}'
 
-  # Layer for image processing libraries (Sharp)
-  ImageProcessingLayer:
-    Type: AWS::Serverless::LayerVersion
-    Properties:
-      LayerName: !Sub photo-blog-image-processing-layer-${Environment}
-      Description: Layer containing image processing libraries
-      ContentUri: ../../common/layers/image-processing/
-      CompatibleRuntimes:
-        - nodejs22.x
-      RetentionPolicy: Retain
+    # Layer for image processing libraries (Sharp)
+    ImageProcessingLayer:
+        Type: AWS::Serverless::LayerVersion
+        Properties:
+            LayerName: !Sub photo-blog-image-processing-layer-${Environment}
+            Description: Layer containing image processing libraries
+            ContentUri: ../../common/layers/image-processing/
+            CompatibleRuntimes:
+                - nodejs22.x
+            RetentionPolicy: Retain
 
-  # Set up staging bucket trigger permissions
-  StagingBucketArn:
-    Type: String
-    Default: !Sub 'arn:aws:s3:::${StagingBucketName}'
+    # Set up staging bucket trigger permissions
+    StagingBucketArn:
+        Type: String
+        Default: !Sub 'arn:aws:s3:::${StagingBucketName}'
 
-  StagingBucketPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !Ref UploadTriggerFunction
-      Principal: s3.amazonaws.com
-      SourceAccount: !Ref AWS::AccountId
-      SourceArn: !Sub 'arn:aws:s3:::${StagingBucketName}'
+    StagingBucketPermission:
+        Type: AWS::Lambda::Permission
+        Properties:
+            Action: lambda:InvokeFunction
+            FunctionName: !Ref UploadTriggerFunction
+            Principal: s3.amazonaws.com
+            SourceAccount: !Ref AWS::AccountId
+            SourceArn: !Sub 'arn:aws:s3:::${StagingBucketName}'
 
 Outputs:
-  PhotosTableName:
-    Description: DynamoDB table for photo metadata
-    Value: !Ref PhotosTable
-    Export:
-      Name: !Sub ${AWS::StackName}-PhotosTable
-      
-  ImageProcessingQueueUrl:
-    Description: SQS queue for image processing
-    Value: !Ref ImageProcessingQueue
-    Export:
-      Name: !Sub ${AWS::StackName}-ProcessingQueue
+    PhotosTableName:
+        Description: DynamoDB table for photo metadata
+        Value: !Ref PhotosTable
+        Export:
+            Name: !Sub ${AWS::StackName}-PhotosTable
+
+    ImageProcessingQueueUrl:
+        Description: SQS queue for image processing
+        Value: !Ref ImageProcessingQueue
+        Export:
+            Name: !Sub ${AWS::StackName}-ProcessingQueue
