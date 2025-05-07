@@ -32,11 +32,18 @@ class DynamoService {
         return docClient.send(command);
     }
 
-
     static async deleteImageMetadata(imageId) {
         const command = new DeleteCommand({
             TableName: TABLE_NAME,
             Key: { imageId }
+        });
+        return docClient.send(command);
+    }
+
+    static async getUserEmail(userID) {
+        const command = new GetCommand({
+            TableName: TABLE_NAME,
+            Key: { userID }
         });
         return docClient.send(command);
     }
