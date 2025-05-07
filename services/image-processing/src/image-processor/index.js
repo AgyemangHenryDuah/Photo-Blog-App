@@ -1,1 +1,0 @@
-// Implement Lambda to process image (watermark, resize) accordingly
