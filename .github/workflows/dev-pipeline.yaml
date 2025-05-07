@@ -42,7 +42,7 @@ jobs:
       - name: Install shared layer dependencies
         run: |
           cd common/layers/nodejs
-          npm ci
+          npm i
       
       # Store DR region in Parameter Store
       - name: Set DR Region Parameter
@@ -92,7 +92,7 @@ jobs:
       - name: Install dependencies
         run: |
           cd services/authentication/src
-          npm ci
+          npm i
       
       # Deploy auth service
       - name: Build and deploy auth service
@@ -137,7 +137,7 @@ jobs:
       - name: Install dependencies
         run: |
           cd services/image-processing/src
-          npm ci
+          npm i
       
       # Deploy image processing service
       - name: Build and deploy image processing service
@@ -181,7 +181,7 @@ jobs:
       - name: Install dependencies
         run: |
           cd services/photo-management/src
-          npm ci
+          npm i
       
       # Deploy photo management service
       - name: Build and deploy photo management service
