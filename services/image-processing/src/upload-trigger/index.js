@@ -1,1 +1,0 @@
-// Implement Lambda to trigger processing upon upload to staging bucket accordingly
