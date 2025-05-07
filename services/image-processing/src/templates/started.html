@@ -1,0 +1,117 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Processing Started</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background-color: #f9f9f9;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            padding: 20px 0;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        .logo {
+            width: 120px;
+            height: auto;
+        }
+        .content {
+            padding: 30px 20px;
+            color: #333333;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            background-color: #e3f2fd;
+            color: #1976d2;
+            border-radius: 20px;
+            font-size: 14px;
+            margin: 10px 0;
+        }
+        .button {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: #1976d2;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin: 20px 0;
+            transition: background-color 0.3s ease;
+        }
+        .button:hover {
+            background-color: #1565c0;
+        }
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #666666;
+            font-size: 12px;
+            border-top: 1px solid #f0f0f0;
+        }
+        .social-links {
+            margin: 15px 0;
+        }
+        .social-links a {
+            margin: 0 10px;
+            color: #666666;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="[YOUR_LOGO_URL]" alt="Company Logo" class="logo">
+            <h1>Image Processing Started</h1>
+        </div>
+        
+        <div class="content">
+            <div class="status-badge">Processing in Progress</div>
+            
+            <h2>Hello <%= customerName %>,</h2>
+            
+            <p>We wanted to let you know that we've started processing your image(s). Our system is working diligently to enhance and optimize your content.</p>
+            
+            <h3>Processing Details:</h3>
+            <ul>
+                <li>File Name: <%= fileName %></li>
+                <li>Started At: <%= startTime %></li>
+                <li>Estimated Completion: <%= estimatedTime %></li>
+            </ul>
+            
+            <p>You'll receive another notification once the processing is complete.</p>
+            
+            <p>If you have any questions or concerns, please don't hesitate to reach out to our support team.</p>
+            
+            <p>Best regards,<br>
+            The [Company_Name] Team</p>
+        </div>
+        
+        <div class="footer">
+            <div class="social-links">
+                <a href="[Facebook_URL]">Facebook</a>
+                <a href="[Twitter_URL]">Twitter</a>
+                <a href="[Instagram_URL]">Instagram</a>
+            </div>
+            <p>© [Current_Year] [Company_Name]. All rights reserved.</p>
+            <p>You're receiving this email because you're subscribed to image processing notifications.</p>
+            <p><a href="[Unsubscribe_URL]">Unsubscribe</a> | <a href="[Privacy_Policy_URL]">Privacy Policy</a></p>
+        </div>
+    </div>
+</body>
+</html>
