@@ -45,7 +45,7 @@ Resources:
   SharedLayer:
     Type: AWS::Serverless::LayerVersion
     Properties:
-      LayerName: !Sub photo-blog-shared-layer-${Environment}
+      LayerName: !Sub photo-blog-app-shared-layer-${Environment}
       Description: Shared dependencies for photo blog services
       ContentUri: ./common/layers/nodejs/
       CompatibleRuntimes:
@@ -68,10 +68,16 @@ Resources:
       TopicArn: !Ref ServiceOutageNotificationTopic
 
   # Common S3 buckets
+
+  DRBackupBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub photo-blog-app-dr-${Environment}-${AWS::AccountId}
+
   ProcessedImagesBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub photo-blog-processed-images-${Environment}-${AWS::AccountId}
+      BucketName: !Sub photo-blog-app-processed-images-${Environment}-${AWS::AccountId}
       CorsConfiguration:
         CorsRules:
           - AllowedHeaders: ['*']
@@ -85,14 +91,14 @@ Resources:
         Rules:
           - Status: Enabled
             Destination:
-              Bucket: !Sub 'arn:aws:s3:::photo-blog-dr-${Environment}-${AWS::AccountId}'
+              Bucket: !GetAtt DRBackupBucket.Arn
               StorageClass: STANDARD
 
   # # DR Backup bucket in secondary region
   # StagingBucket:
   #   Type: AWS::S3::Bucket
   #   Properties:
-  #     BucketName: !Sub photo-blog-staging-${Environment}-${AWS::AccountId}
+  #     BucketName: !Sub photo-blog-app-staging-${Environment}-${AWS::AccountId}
   #     LifecycleConfiguration:
   #       Rules:
   #         - Id: DeleteOldFiles

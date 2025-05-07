@@ -22,7 +22,7 @@ Resources:
   ImageProcessingQueue:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: !Sub photo-blog-image-processing-${Environment}
+      QueueName: !Sub photo-blog-app-image-processing-${Environment}
       VisibilityTimeout: 300  # 5 minutes
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt ImageProcessingDLQ.Arn
@@ -32,7 +32,7 @@ Resources:
   ImageProcessingDLQ:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: !Sub photo-blog-image-processing-dlq-${Environment}
+      QueueName: !Sub photo-blog-app-image-processing-dlq-${Environment}
       MessageRetentionPeriod: 1209600  # 14 days
 
   # Lambda to process image (watermark, resize)
@@ -121,7 +121,7 @@ Resources:
   PhotosTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub photo-blog-photos-${Environment}
+      TableName: !Sub photo-blog-app-photos-${Environment}
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: userId
@@ -144,13 +144,13 @@ Resources:
       # GlobalTableConfiguration:
       #   ReplicationGroup:
       #     - Region: !Ref AWS::Region
-      #     - Region: !Sub '{{resolve:ssm:/photo-blog/${Environment}/dr-region}}'
+      #     - Region: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/dr-region}}'
 
   # Layer for image processing libraries (Sharp)
   ImageProcessingLayer:
     Type: AWS::Serverless::LayerVersion
     Properties:
-      LayerName: !Sub photo-blog-image-processing-layer-${Environment}
+      LayerName: !Sub photo-blog-app-image-processing-layer-${Environment}
       Description: Layer containing image processing libraries
       ContentUri: ../../common/layers/image-processing/
       CompatibleRuntimes:
@@ -161,7 +161,7 @@ Resources:
   StagingBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub photo-blog-staging-${Environment}-${AWS::AccountId}
+      BucketName: !Sub photo-blog-app-staging-${Environment}-${AWS::AccountId}
       LifecycleConfiguration:
         Rules:
           - Id: DeleteOldFiles

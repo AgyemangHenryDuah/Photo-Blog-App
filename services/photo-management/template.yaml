@@ -29,7 +29,7 @@ Resources:
         DefaultAuthorizer: CognitoAuthorizer
         Authorizers:
           CognitoAuthorizer:
-            UserPoolArn: !Sub '{{resolve:ssm:/photo-blog/${Environment}/user-pool-arn}}'
+            UserPoolArn: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/user-pool-arn}}'
         AddDefaultAuthorizerToCorsPreflight: false # To hopefully mitigate our previously encountered cors issues :)
 
   # Get user photos function
@@ -43,7 +43,7 @@ Resources:
         - !Ref SharedLayerArn
       Environment:
         Variables:
-          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog/${Environment}/photos-table}}'
+          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/photos-table}}'
           PROCESSED_BUCKET: !Ref ProcessedBucketName
       Policies:
         - DynamoDBReadPolicy:
@@ -69,7 +69,7 @@ Resources:
         - !Ref SharedLayerArn
       Environment:
         Variables:
-          STAGING_BUCKET: !Sub '{{resolve:ssm:/photo-blog/${Environment}/staging-bucket}}'
+          STAGING_BUCKET: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/staging-bucket}}'
       Policies:
         - S3WritePolicy:
             BucketName: '*'
@@ -92,7 +92,7 @@ Resources:
         - !Ref SharedLayerArn
       Environment:
         Variables:
-          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog/${Environment}/photos-table}}'
+          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/photos-table}}'
           PROCESSED_BUCKET: !Ref ProcessedBucketName
       Policies:
         - DynamoDBCrudPolicy:
@@ -118,7 +118,7 @@ Resources:
         - !Ref SharedLayerArn
       Environment:
         Variables:
-          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog/${Environment}/photos-table}}'
+          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/photos-table}}'
           PROCESSED_BUCKET: !Ref ProcessedBucketName
       Policies:
         - DynamoDBCrudPolicy:
@@ -144,7 +144,7 @@ Resources:
         - !Ref SharedLayerArn
       Environment:
         Variables:
-          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog/${Environment}/photos-table}}'
+          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/photos-table}}'
           PROCESSED_BUCKET: !Ref ProcessedBucketName
       Policies:
         - DynamoDBReadPolicy:
@@ -170,7 +170,7 @@ Resources:
         - !Ref SharedLayerArn
       Environment:
         Variables:
-          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog/${Environment}/photos-table}}'
+          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/photos-table}}'
           PROCESSED_BUCKET: !Ref ProcessedBucketName
           SHARE_LINKS_TABLE: !Ref ShareLinksTable
       Policies:
@@ -199,7 +199,7 @@ Resources:
         - !Ref SharedLayerArn
       Environment:
         Variables:
-          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog/${Environment}/photos-table}}'
+          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/photos-table}}'
           PROCESSED_BUCKET: !Ref ProcessedBucketName
           SHARE_LINKS_TABLE: !Ref ShareLinksTable
       Policies:
@@ -223,7 +223,7 @@ Resources:
   ShareLinksTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub photo-blog-share-links-${Environment}
+      TableName: !Sub photo-blog-app-share-links-${Environment}
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: shareToken
@@ -238,7 +238,7 @@ Resources:
       # GlobalTableConfiguration:
       #   ReplicationGroup:
       #     - Region: !Ref AWS::Region
-      #     - Region: !Sub '{{resolve:ssm:/photo-blog/${Environment}/dr-region}}'
+      #     - Region: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/dr-region}}'
 
 Outputs:
   PhotosApiEndpoint:
