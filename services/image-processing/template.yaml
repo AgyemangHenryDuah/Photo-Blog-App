@@ -169,14 +169,14 @@ Resources:
             ExpirationInDays: 1
 
   # Set up staging bucket trigger permissions
-  StagingBucketPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !Ref UploadTriggerFunction
-      Principal: s3.amazonaws.com
-      SourceAccount: !Ref AWS::AccountId
-      SourceArn: !Sub 'arn:aws:s3:::${StagingBucket}'
+  # StagingBucketPermission:
+  #   Type: AWS::Lambda::Permission
+  #   Properties:
+  #     Action: lambda:InvokeFunction
+  #     FunctionName: !Ref UploadTriggerFunction
+  #     Principal: s3.amazonaws.com
+  #     SourceAccount: !Ref AWS::AccountId
+  #     SourceArn: !Sub 'arn:aws:s3:::${StagingBucket}'
 
 Outputs:
   PhotosTableName:
