@@ -27,7 +27,7 @@ Resources:
       UsernameAttributes:
         - email
       EmailConfiguration:
-        EmailSendingAccount: DEVELOPER
+        EmailSendingAccount: DEVELOPER #
         SourceArn: !Sub arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/noreply@${DomainName}
       Schema:
         - Name: email
