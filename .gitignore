@@ -3,3 +3,4 @@
 services/authentication/.aws-sam
 services/image-processing/.aws-sam
 services/photo-management/.aws-sam
+*node_modules/
