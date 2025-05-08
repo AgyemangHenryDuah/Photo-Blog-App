@@ -1,7 +1,7 @@
-import {
+const {
     CognitoIdentityProviderClient,
     ForgotPasswordCommand,
-} from '@aws-sdk/client-cognito-identity-provider';
+} = require('@aws-sdk/client-cognito-identity-provider');
 
 const cognitoClient = new CognitoIdentityProviderClient();
 
@@ -10,7 +10,7 @@ const headers = {
     'Access-Control-Allow-Origin': '*',
 };
 
-export const handler = async (event) => {
+exports.handler = async (event) => {
     try {
         const { email } = JSON.parse(event.body);
 

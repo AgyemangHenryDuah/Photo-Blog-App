@@ -34,10 +34,14 @@ Resources:
                   AttributeDataType: String
                   Mutable: true
                   Required: true
-                - Name: name
+                - Name: firstName
                   AttributeDataType: String
                   Mutable: true
-                  Required: true
+                  Required: false
+                - Name: lastName
+                  AttributeDataType: String
+                  Mutable: true
+                  Required: false
             # LambdaConfig:
             #   PostConfirmation: !GetAtt PostConfirmationFunction.Arn
             # Enable password recovery and MFA for security
@@ -48,15 +52,28 @@ Resources:
             #     - Name: verified_email
             #       Priority: 1
 
-        # Cognito App Client
-        UserPoolClient:
-            Type: AWS::Cognito::UserPoolClient
-            Properties:
-                ClientName: !Sub photo-blog-app-client-${Environment}
-                UserPoolId: !Ref UserPool
-                GenerateSecret: false
-                ExplicitAuthFlows:
-                    - ALLOW_USER_PASSWORD_AUTH
+    # Cognito App Client
+    UserPoolClient:
+        Type: AWS::Cognito::UserPoolClient
+        Properties:
+            ClientName: !Sub photo-blog-app-client-${Environment}
+            UserPoolId: !Ref UserPool
+            GenerateSecret: false
+            ExplicitAuthFlows:
+                - ALLOW_USER_SRP_AUTH
+                - ALLOW_REFRESH_TOKEN_AUTH
+                - ALLOW_USER_PASSWORD_AUTH
+                - ALLOW_ADMIN_USER_PASSWORD_AUTH
+                - ALLOW_CUSTOM_AUTH
+            ReadAttributes:
+                - email
+                - custom:firstName
+                - custom:lastName
+            WriteAttributes:
+                - email
+                - custom:firstName
+                - custom:lastName
+            PreventUserExistenceErrors: ENABLED
 
     # SES Email Identity
     # EmailIdentity:
@@ -83,25 +100,6 @@ Resources:
     #         USERS_TABLE: !Ref UsersTable
     #         FROM_EMAIL: !Sub noreply@${DomainName}
 
-    # Lambda for user signup confirmation
-    #PostConfirmationFunction:
-    #    Type: AWS::Serverless::Function
-    #    Properties:
-    #        CodeUri: src/post-confirmation/
-    #        Handler: index.handler
-    #        Description: Handles post confirmation tasks for new users
-    #        Layers:
-    #            - !Ref SharedLayerArn
-    #        Policies:
-    #            - AmazonSESFullAccess
-    #            - AWSLambdaBasicExecutionRole
-    #            - DynamoDBCrudPolicy:
-    #                  TableName: !Ref UsersTable
-    #        Environment:
-    #            Variables:
-    #                USERS_TABLE: !Ref UsersTable
-    #                FROM_EMAIL: !Sub noreply@${DomainName}
-
     # Users Database
     UsersTable:
         Type: AWS::DynamoDB::Table
@@ -111,34 +109,43 @@ Resources:
             AttributeDefinitions:
                 - AttributeName: userId
                   AttributeType: S
+                - AttributeName: email
+                  AttributeType: S
             KeySchema:
                 - AttributeName: userId
                   KeyType: HASH
+            GlobalSecondaryIndexes:
+                - IndexName: EmailIndex
+                  KeySchema:
+                      - AttributeName: email
+                        KeyType: HASH
+                  Projection:
+                      ProjectionType: ALL
             StreamSpecification:
                 StreamViewType: NEW_AND_OLD_IMAGES
 
-        # Lambda for Cognito backup (daily snapshot)
-        CognitoBackupFunction:
-            Type: AWS::Serverless::Function
-            Properties:
-                CodeUri: src/cognito-backup/
-                Handler: index.handler
-                Description: Creates backup of Cognito user pool
-                Environment:
-                    Variables:
-                        USER_POOL_ID: !Ref UserPool
-                        BACKUP_TABLE: !Ref CognitoBackupTable
-                Policies:
-                    - DynamoDBCrudPolicy:
-                          TableName: !Ref CognitoBackupTable
-                    - AmazonCognitoReadOnly
-                    - AWSLambdaBasicExecutionRole
-                Events:
-                    DailyBackup:
-                        Type: Schedule
-                        Properties:
-                            Schedule: cron(0 1 * * ? *)
-                            Description: Daily Cognito user pool backup
+    # Lambda for Cognito backup (daily snapshot)
+    CognitoBackupFunction:
+        Type: AWS::Serverless::Function
+        Properties:
+            CodeUri: src/
+            Handler: cognitoBackup.handler
+            Description: Creates backup of Cognito user pool
+            Environment:
+                Variables:
+                    USER_POOL_ID: !Ref UserPool
+                    BACKUP_TABLE: !Ref CognitoBackupTable
+            Policies:
+                - DynamoDBCrudPolicy:
+                      TableName: !Ref CognitoBackupTable
+                - AmazonCognitoReadOnly
+                - AWSLambdaBasicExecutionRole
+            Events:
+                DailyBackup:
+                    Type: Schedule
+                    Properties:
+                        Schedule: cron(0 1 * * ? *)
+                        Description: Daily Cognito user pool backup
 
     # DynamoDB table for Cognito backup
     CognitoBackupTable:
@@ -178,46 +185,42 @@ Resources:
     RegisterUserFunction:
         Type: AWS::Serverless::Function
         Properties:
-            CodeUri: src/register-user/
-            Handler: index.handler
+            CodeUri: src/
+            Handler: signup.handler
             Description: Handles user registration via Cognito
+            Timeout: 15
+            MemorySize: 256
             Layers:
-                - !Ref SharedLayerArn # Use the parameter directly
+                - !Ref SharedLayerArn
             Environment:
                 Variables:
                     USER_POOL_ID: !Ref UserPool
                     CLIENT_ID: !Ref UserPoolClient
+                    USERS_TABLE: !Ref UsersTable
             Policies:
                 - AmazonCognitoPowerUser
                 - AWSLambdaBasicExecutionRole
+                - DynamoDBCrudPolicy:
+                      TableName: !Ref UsersTable
             Events:
                 ApiEvent:
                     Type: Api
                     Properties:
                         RestApiId: !Ref AuthApiGateway
-                        Path: /register-user
+                        Path: /signup
                         Method: post
                         Auth:
-                            DefaultAuthorizer: CognitoAuthorizer
-                            Authorizers:
-                                CognitoAuthorizer:
-                                    UserPoolArn: !GetAtt UserPool.Arn
-                            AddDefaultAuthorizerToCorsPreflight: false # To hopefully mitigate our previously encountered cors issues :)
-                        Cors:
-                            AllowMethods: "'POST, GET, OPTIONS'"
-                            AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-                            AllowOrigin: !Sub "'https://${DomainName}'"
-                            MaxAge: "'600'"
+                            Authorizer: NONE
 
     # Login User Function
     LoginUserFunction:
         Type: AWS::Serverless::Function
         Properties:
-            CodeUri: src/login-user/
-            Handler: index.handler
+            CodeUri: src/
+            Handler: login.handler
             Description: Handles user login and returns JWT tokens
             Layers:
-                - !Ref SharedLayerArn # Use the parameter directly
+                - !Ref SharedLayerArn
             Environment:
                 Variables:
                     USER_POOL_ID: !Ref UserPool
@@ -230,7 +233,32 @@ Resources:
                     Type: Api
                     Properties:
                         RestApiId: !Ref AuthApiGateway
-                        Path: /login-user
+                        Path: /login
+                        Method: post
+                        Auth:
+                            Authorizer: NONE
+    # Confirm Signup Function
+    ConfirmSignUpFunction:
+        Type: AWS::Serverless::Function
+        Properties:
+            CodeUri: src/
+            Handler: confirmSignup.handler
+            Description: Handles user login and returns JWT tokens
+            Layers:
+                - !Ref SharedLayerArn
+            Environment:
+                Variables:
+                    USER_POOL_ID: !Ref UserPool
+                    CLIENT_ID: !Ref UserPoolClient
+            Policies:
+                - AmazonCognitoPowerUser
+                - AWSLambdaBasicExecutionRole
+            Events:
+                ApiEvent:
+                    Type: Api
+                    Properties:
+                        RestApiId: !Ref AuthApiGateway
+                        Path: /confirm-signup
                         Method: post
                         Auth:
                             Authorizer: NONE
@@ -239,8 +267,8 @@ Resources:
     ForgotPasswordFunction:
         Type: AWS::Serverless::Function
         Properties:
-            CodeUri: src/forgot-password/
-            Handler: index.handler
+            CodeUri: src/
+            Handler: forgotPassword.handler
             Description: Initiates password reset process
             Layers:
                 - !Ref SharedLayerArn # Use the parameter directly
@@ -265,8 +293,8 @@ Resources:
     ResetPasswordFunction:
         Type: AWS::Serverless::Function
         Properties:
-            CodeUri: src/reset-password/
-            Handler: index.handler
+            CodeUri: src/
+            Handler: resetPassword.handler
             Description: Completes password reset with verification code
             Layers:
                 - !Ref SharedLayerArn # Use the parameter directly
@@ -287,12 +315,12 @@ Resources:
                         Auth:
                             Authorizer: NONE
 
-    # Get User Info Function (Protected Route)
-    GetUserInfoFunction:
+    # Get User Function (Protected Route)
+    GetUserFunction:
         Type: AWS::Serverless::Function
         Properties:
-            CodeUri: src/get-user/
-            Handler: index.handler
+            CodeUri: src/
+            Handler: getUser.handler
             Description: Gets the current user's information
             Layers:
                 - !Ref SharedLayerArn # Use the parameter directly

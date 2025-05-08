@@ -6,9 +6,8 @@ const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const {
     PutCommand,
     DynamoDBDocumentClient,
-    ScanCommand,
+    QueryCommand,
 } = require('@aws-sdk/lib-dynamodb');
-const crypto = require('crypto');
 
 const cognitoClient = new CognitoIdentityProviderClient({});
 const ddbClient = new DynamoDBClient({});
@@ -18,17 +17,32 @@ exports.handler = async (event) => {
     try {
         const { firstName, lastName, email, password } = JSON.parse(event.body);
 
+        if (!firstName || !lastName || !email || !password) {
+            return {
+                statusCode: 400,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message:
+                        'Missing required fields: username, firstName, lastName, password, and email are required',
+                }),
+            };
+        }
+
         const checkUser = await docClient.send(
-            new ScanCommand({
+            new QueryCommand({
                 TableName: process.env.USERS_TABLE,
-                FilterExpression: 'email = :email',
+                IndexName: 'EmailIndex',
+                KeyConditionExpression: '#email = :email',
+                ExpressionAttributeNames: {
+                    '#email': 'email',
+                },
                 ExpressionAttributeValues: {
                     ':email': email,
                 },
             }),
         );
 
-        if (checkUser.Count > 0) {
+        if (checkUser.Items && checkUser.Items.length > 0) {
             return {
                 statusCode: 400,
                 headers: getCorsHeaders(),
@@ -48,8 +62,6 @@ exports.handler = async (event) => {
             };
         }
 
-        const hash = hashPassword(password);
-
         const input = {
             ClientId: process.env.CLIENT_ID,
             Username: email,
@@ -62,10 +74,9 @@ exports.handler = async (event) => {
         };
 
         const command = new SignUpCommand(input);
-        await cognitoClient.send(command);
+        const response = await cognitoClient.send(command);
 
-        // Use a UUID instead if no UserSub
-        const userId = crypto.randomUUID();
+        const userId = response.UserSub;
 
         await docClient.send(
             new PutCommand({
@@ -75,7 +86,6 @@ exports.handler = async (event) => {
                     email,
                     firstName,
                     lastName,
-                    password: hash,
                     createdAt: new Date().toISOString(),
                 },
             }),
@@ -120,15 +130,6 @@ function getCorsHeaders() {
         'Access-Control-Allow-Credentials': true,
         'Content-Type': 'application/json',
     };
-}
-
-// Hash password using PBKDF2
-function hashPassword(password) {
-    const salt = crypto.randomBytes(16).toString('hex');
-    const hash = crypto
-        .pbkdf2Sync(password, salt, 100000, 64, 'sha512')
-        .toString('hex');
-    return `${salt}:${hash}`;
 }
 
 const isPasswordValid = (password) => {
