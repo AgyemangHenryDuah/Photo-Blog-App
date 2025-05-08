@@ -19,7 +19,7 @@ exports.handler = async (event) => {
                 'Access-Control-Allow-Credentials': true,
                 'Content-Type': 'application/json'
               },
-            body: JSON.stringify(responseBody);
+            body: JSON.stringify(responseBody)
 
         }
 
