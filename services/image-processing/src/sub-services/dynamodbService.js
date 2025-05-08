@@ -40,14 +40,6 @@ class DynamoService {
         return docClient.send(command);
     }
 
-    static async getUserDetails(userId) { 
-        const command = new GetCommand({
-            TableName: TABLE_NAME,
-            Key: { userId }
-        });
-        const result = await docClient.send(command);
-        return result.Item;
-    }
 }
 
 module.exports = DynamoService;
