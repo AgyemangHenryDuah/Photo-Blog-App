@@ -141,7 +141,7 @@ jobs:
               Environment=${ENVIRONMENT} \
               DomainName=${DOMAIN_NAME} \
               SharedLayerArn=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/shared-layer" --query "Parameter.Value" --output text) \
-            --capabilities CAPABILITY_IAM \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
             --no-fail-on-empty-changeset
       
       # Export auth resources to Parameter Store
@@ -208,7 +208,7 @@ jobs:
               Environment=${ENVIRONMENT} \
               ProcessedBucketName=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/processed-bucket" --query "Parameter.Value" --output text) \
               SharedLayerArn=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/shared-layer" --query "Parameter.Value" --output text) \
-            --capabilities CAPABILITY_IAM \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
             --no-fail-on-empty-changeset
       
       # Export image processing resources to Parameter Store
@@ -270,7 +270,7 @@ jobs:
               SharedLayerArn=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/shared-layer" --query "Parameter.Value" --output text) \
               PhotosTableName=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/photos-table" --query "Parameter.Value" --output text) \
               UserPoolArn=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/user-pool-arn" --query "Parameter.Value" --output text) \
-            --capabilities CAPABILITY_IAM \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
             --no-fail-on-empty-changeset
       
       # Export API Gateway endpoint to Parameter Store
