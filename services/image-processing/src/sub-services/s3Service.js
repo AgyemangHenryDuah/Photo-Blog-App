@@ -1,14 +1,13 @@
 const { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
 const { s3Client } = require("../config/aws");
 
-class S3Service {
-  constructor() {
-    this.bucketName = process.env.BUCKET_NAME;
-  }
+const STAGING_BUCKET_NAME = process.env.STAGING_BUCKET_NAME;
+const ASSET_BUCKET_NAME = process.env.ASSET_BUCKET_NAME;
 
+class S3Service {
   async uploadFromStaging(key) {
     const command = new GetObjectCommand({
-      Bucket: this.bucketName,
+      Bucket: STAGING_BUCKET_NAME,
       Key: key,
     });
     const { Body } = await s3Client.send(command);
@@ -18,7 +17,7 @@ class S3Service {
   async uploadToAssetBucket(watermarkedImage, key) {
     const outputKey = `watermarked/${key}`;
     const command = new PutObjectCommand({
-      Bucket: this.bucketName,
+      Bucket: ASSET_BUCKET_NAME,
       Key: outputKey,
       Body: watermarkedImage,
       ContentType: "image/jpeg",
@@ -28,7 +27,7 @@ class S3Service {
 
   async deleteFromStaging(key) {
     const command = new DeleteObjectCommand({
-      Bucket: this.bucketName,
+      Bucket: STAGING_BUCKET_NAME,
       Key: key,
     });
     await s3Client.send(command);
