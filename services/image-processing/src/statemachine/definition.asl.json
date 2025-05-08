@@ -1,0 +1,140 @@
+{
+    "Comment": "Image Processing Workflow",
+    "StartAt": "ProcessImage",
+    "States": {
+        "ProcessImage": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::sqs:receiveMessage",
+            "Parameters": {
+                "QueueUrl": "${ImageProcessingQueue}",
+                "MaxNumberOfMessages": 1,
+                "WaitTimeSeconds": 20
+            },
+            "Next": "ExtractMetadata",
+            "Retry": [
+                {
+                    "ErrorEquals": [
+                        "States.ALL"
+                    ],
+                    "IntervalSeconds": 5,
+                    "MaxAttempts": 3,
+                    "BackoffRate": 2
+                }
+            ]
+        },
+        "ExtractMetadata": {
+            "Type": "Task",
+            "Resource": "${ExtractMetadataArn}",
+            "Next": "SendStartNotification",
+            "Retry": [
+                {
+                    "ErrorEquals": [
+                        "Lambda.ServiceException",
+                        "Lambda.AWSLambdaException",
+                        "Lambda.SdkClientException"
+                    ],
+                    "IntervalSeconds": 2,
+                    "MaxAttempts": 3,
+                    "BackoffRate": 2
+                }
+            ]
+        },
+        "SendStartNotification": {
+            "Type": "Task",
+            "Resource": "${SendStartNotificationArn}",
+            "Next": "ApplyWatermark",
+            "Retry": [
+                {
+                    "ErrorEquals": [
+                        "States.ALL"
+                    ],
+                    "IntervalSeconds": 1,
+                    "MaxAttempts": 2,
+                    "BackoffRate": 2
+                }
+            ]
+        },
+        "ApplyWatermark": {
+            "Type": "Task",
+            "Resource": "${ApplyWatermarkArn}",
+            "Next": "UpdateDatabaseStatus",
+            "Retry": [
+                {
+                    "ErrorEquals": [
+                        "States.ALL"
+                    ],
+                    "IntervalSeconds": 5,
+                    "MaxAttempts": 3,
+                    "BackoffRate": 2
+                }
+            ],
+            "Catch": [
+                {
+                    "ErrorEquals": [
+                        "States.ALL"
+                    ],
+                    "Next": "NotifyFailure",
+                    "ResultPath": "$.error"
+                }
+            ]
+        },
+        "UpdateDatabaseStatus": {
+            "Type": "Task",
+            "Resource": "${UpdateDatabaseStatusArn}",
+            "Next": "CleanupOriginal",
+            "Retry": [
+                {
+                    "ErrorEquals": [
+                        "States.ALL"
+                    ],
+                    "IntervalSeconds": 2,
+                    "MaxAttempts": 3,
+                    "BackoffRate": 2
+                }
+            ]
+        },
+        "CleanupOriginal": {
+            "Type": "Task",
+            "Resource": "${CleanupOriginalArn}",
+            "Next": "SendFinalNotification",
+            "Retry": [
+                {
+                    "ErrorEquals": [
+                        "States.ALL"
+                    ],
+                    "IntervalSeconds": 2,
+                    "MaxAttempts": 3,
+                    "BackoffRate": 2
+                }
+            ]
+        },
+        "SendFinalNotification": {
+            "Type": "Task",
+            "Resource": "${SendFinalNotificationArn}",
+            "End": true,
+            "Retry": [
+                {
+                    "ErrorEquals": [
+                        "States.ALL"
+                    ],
+                    "IntervalSeconds": 1,
+                    "MaxAttempts": 2,
+                    "BackoffRate": 2
+                }
+            ]
+        },
+        "NotifyFailure": {
+            "Type": "Task",
+            "Resource": "${SendFinalNotificationArn}",
+            "Parameters": {
+                "body": {
+                    "userEmail.$": "$.body.userEmail",
+                    "imageId.$": "$.body.imageId",
+                    "originalFilename.$": "$.body.originalFilename",
+                    "error.$": "$.error"
+                }
+            },
+            "End": true
+        }
+    }
+}
