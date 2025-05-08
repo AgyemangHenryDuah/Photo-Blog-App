@@ -31,7 +31,7 @@ Parameters:
 Globals:
   Function:
     Timeout: 30
-    Runtime: nodejs22.x
+    Runtime: nodejs20.x
     MemorySize: 256
     Environment:
       Variables:
@@ -42,15 +42,7 @@ Globals:
 
 Resources:
   # Shared resources across all services
-  SharedLayer:
-    Type: AWS::Serverless::LayerVersion
-    Properties:
-      LayerName: !Sub photo-blog-app-shared-layer-${Environment}
-      Description: Shared dependencies for photo blog services
-      ContentUri: ./common/layers/nodejs/
-      CompatibleRuntimes:
-        - nodejs22.x
-      RetentionPolicy: Retain
+  # Note: SharedLayer is now created in the GitHub Actions workflow
 
   # Admin SNS DR Topic
   ServiceOutageNotificationTopic:
@@ -101,17 +93,6 @@ Resources:
               Bucket: !GetAtt DRBackupBucket.Arn
               StorageClass: STANDARD
 
-  # # DR Backup bucket in secondary region
-  # StagingBucket:
-  #   Type: AWS::S3::Bucket
-  #   Properties:
-  #     BucketName: !Sub photo-blog-app-staging-${Environment}-${AWS::AccountId}
-  #     LifecycleConfiguration:
-  #       Rules:
-  #         - Id: DeleteOldFiles
-  #           Status: Enabled
-  #           ExpirationInDays: 1
-
   # S3 Replication IAM role
   S3ReplicationRole:
     Type: AWS::IAM::Role
@@ -127,33 +108,32 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonS3FullAccess
 
   # Nested stacks for each service
-  # AuthServiceStack:
-  #   Type: AWS::CloudFormation::Stack
-  #   Properties:
-  #     TemplateURL: ./services/authentication/template.yaml
-  #     Parameters:
-  #       Environment: !Ref Environment
-  #       DomainName: !Ref DomainName
-  #       SharedLayerArn: !Ref SharedLayer
+  AuthServiceStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: ./services/authentication/template.yaml
+      Parameters:
+        Environment: !Ref Environment
+        DomainName: !Ref DomainName
+        SharedLayerArn: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/shared-layer}}'
 
-  # ImageProcessingStack:
-  #   Type: AWS::CloudFormation::Stack
-  #   Properties:
-  #     TemplateURL: ./services/image-processing/template.yaml
-  #     Parameters:
-  #       Environment: !Ref Environment
-  #       # StagingBucketName: !Ref StagingBucket
-  #       ProcessedBucketName: !Ref ProcessedImagesBucket
-  #       SharedLayerArn: !Ref SharedLayer
+  ImageProcessingStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: ./services/image-processing/template.yaml
+      Parameters:
+        Environment: !Ref Environment
+        ProcessedBucketName: !Ref ProcessedImagesBucket
+        SharedLayerArn: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/shared-layer}}'
 
-  # PhotoManagementStack:
-  #   Type: AWS::CloudFormation::Stack
-  #   Properties:
-  #     TemplateURL: ./services/photo-management/template.yaml
-  #     Parameters:
-  #       Environment: !Ref Environment
-  #       ProcessedBucketName: !Ref ProcessedImagesBucket
-  #       SharedLayerArn: !Ref SharedLayer
+  PhotoManagementStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: ./services/photo-management/template.yaml
+      Parameters:
+        Environment: !Ref Environment
+        ProcessedBucketName: !Ref ProcessedImagesBucket
+        SharedLayerArn: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/shared-layer}}'
 
 Outputs:
   ProcessedImagesBucketName:
@@ -161,15 +141,3 @@ Outputs:
     Value: !Ref ProcessedImagesBucket
     Export:
       Name: !Sub ${AWS::StackName}-ProcessedImagesBucket
-  
-  # StagingBucketName:
-  #   Description: S3 bucket for image staging
-  #   Value: !Ref StagingBucket
-  #   Export:
-  #     Name: !Sub ${AWS::StackName}-StagingBucket
-  
-  SharedLayerArn:
-    Description: ARN of the shared Lambda layer
-    Value: !Ref SharedLayer
-    Export:
-      Name: !Sub ${AWS::StackName}-SharedLayer

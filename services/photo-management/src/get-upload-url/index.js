@@ -1,5 +1,5 @@
-
-const { createResponse, parseBody, handleError } = require('/opt/nodejs/shared-utils');
+const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+const { createResponse, parseBody, handleError } = require('../../../../common/shared-utils');
 
 
 exports.handler = async (event) => {

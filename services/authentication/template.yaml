@@ -14,7 +14,7 @@ Parameters:
 
 Globals:
   Function:
-    Runtime: nodejs22.x
+    Runtime: nodejs20.x
 
 Resources:
   # Cognito User Pool
@@ -85,7 +85,7 @@ Resources:
       Handler: index.handler
       Description: Handles post confirmation tasks for new users
       Layers:
-        - !Ref SharedLayerArn
+        - !Ref SharedLayerArn  # Use the parameter directly
       Policies:
         - AmazonSESFullAccess
         - AWSLambdaBasicExecutionRole
@@ -111,11 +111,6 @@ Resources:
           KeyType: HASH
       StreamSpecification:
         StreamViewType: NEW_AND_OLD_IMAGES
-      # DR Replication to backup region
-      # GlobalTableConfiguration:
-      #   ReplicationGroup:
-      #     - Region: !Ref AWS::Region
-      #     - Region: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/dr-region}}'
 
   # Lambda for Cognito backup (daily snapshot)
   CognitoBackupFunction:
@@ -152,11 +147,6 @@ Resources:
       KeySchema:
         - AttributeName: userId
           KeyType: HASH
-      # DR Replication to backup region
-      # GlobalTableConfiguration:
-      #   ReplicationGroup:
-      #     - Region: !Ref AWS::Region
-      #     - Region: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/dr-region}}'
 
   # API Gateway
   AuthApiGateway:
@@ -169,7 +159,7 @@ Resources:
         Authorizers:
           CognitoAuthorizer:
             UserPoolArn: !GetAtt UserPool.Arn
-        AddDefaultAuthorizerToCorsPreflight: false # To hopefully mitigate our previously encountered cors issues :)
+        AddDefaultAuthorizerToCorsPreflight: false
       Cors:
         AllowMethods: "'POST, GET, OPTIONS'"
         AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
@@ -186,7 +176,7 @@ Resources:
       Handler: index.handler
       Description: Handles user registration via Cognito
       Layers:
-        - !Ref SharedLayerArn
+        - !Ref SharedLayerArn  # Use the parameter directly
       Environment:
         Variables:
           USER_POOL_ID: !Ref UserPool
@@ -212,7 +202,7 @@ Resources:
       Handler: index.handler
       Description: Handles user login and returns JWT tokens
       Layers:
-        - !Ref SharedLayerArn
+        - !Ref SharedLayerArn  # Use the parameter directly
       Environment:
         Variables:
           USER_POOL_ID: !Ref UserPool
@@ -238,7 +228,7 @@ Resources:
       Handler: index.handler
       Description: Initiates password reset process
       Layers:
-        - !Ref SharedLayerArn
+        - !Ref SharedLayerArn  # Use the parameter directly
       Environment:
         Variables:
           USER_POOL_ID: !Ref UserPool
@@ -264,7 +254,7 @@ Resources:
       Handler: index.handler
       Description: Completes password reset with verification code
       Layers:
-        - !Ref SharedLayerArn
+        - !Ref SharedLayerArn  # Use the parameter directly
       Environment:
         Variables:
           USER_POOL_ID: !Ref UserPool
@@ -290,7 +280,7 @@ Resources:
       Handler: index.handler
       Description: Gets the current user's information
       Layers:
-        - !Ref SharedLayerArn
+        - !Ref SharedLayerArn  # Use the parameter directly
       Environment:
         Variables:
           USER_POOL_ID: !Ref UserPool
@@ -309,7 +299,6 @@ Resources:
             Method: get
             Auth:
               Authorizer: CognitoAuthorizer
-
 
 Outputs:
   UserPoolId:

@@ -13,7 +13,7 @@ Parameters:
 
 Globals:
   Function:
-    Runtime: nodejs22.x
+    Runtime: nodejs20.x
 
 Resources:
   # API Gateway

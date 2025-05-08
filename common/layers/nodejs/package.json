@@ -1,7 +1,17 @@
 {
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.804.0",
+    "@aws-sdk/client-s3": "^3.485.0",
+    "@aws-sdk/client-sqs": "^3.485.0",
+    "@aws-sdk/client-sns": "^3.485.0",
+    "@aws-sdk/client-ses": "^3.485.0",
+    "@aws-sdk/client-dynamodb": "^3.485.0",
+    "@aws-sdk/lib-dynamodb": "^3.485.0",
+    "@aws-sdk/client-sfn": "^3.485.0",
+    "@aws-sdk/credential-providers": "^3.485.0",
     "uuid": "^9.0.1",
     "human-friendly-date": "^1.0.2"
   }
 }
+
+
+
