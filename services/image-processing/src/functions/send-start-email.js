@@ -1,28 +1,47 @@
 exports.handler = async (event) => {
     try {
-      const { imageId, errorMessage } = JSON.parse(event.body);
+      const { userInfo, imageInfo } = JSON.parse(event.body);
   
       // Get user email from DynamoDB
-      const userEmail = await processingService.getUserEmail(imageId);
+      const userEmail = userInfo.email;
+      const firstName = userInfo.firstname;
+      const lastName = userInfo.lastname;
+  
+      //Get image metadata
+      const imageId = imageInfo.imageId;
+      const imageName = imageInfo.imageName;
   
       if (!userEmail) {
-        throw new Error("User email not found for image: " + imageId);
+        throw new Error("User email not found for image: " + imageName);
       }
   
       // Send processing failed email
-  
       await emailService.sendEmail(userEmail, "processing_started", {
-        imageId,
-        successTime: new Date().toISOString(),
+        firstName,
+        imageName,
+        startTime: new Date().toISOString(),
       });
   
       return {
         statusCode: 200,
-        body: JSON.stringify({ message: "Processing failed email sent" }),
+        message: JSON.stringify({ message: "Successfully processed email sent" }),
+        body: {
+          firstName,
+          lastName,
+          imageName,
+          s3key: imageInfo.s3key,
+          imageId,
+          userEmail,
+          Notification: true,
+        },
       };
     } catch (error) {
       console.error("Error in processingFailed:", error);
-      throw error;
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ message: "Error sending email" }),
+        notification: false,
+      };
     }
   };
   
