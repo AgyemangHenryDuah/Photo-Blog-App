@@ -3,7 +3,11 @@ const {
     SignUpCommand,
 } = require('@aws-sdk/client-cognito-identity-provider');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { PutCommand, DynamoDBDocumentClient } = require('@aws-sdk/lib-dynamodb');
+const {
+    PutCommand,
+    DynamoDBDocumentClient,
+    ScanCommand,
+} = require('@aws-sdk/lib-dynamodb');
 const crypto = require('crypto');
 
 const cognitoClient = new CognitoIdentityProviderClient({});
@@ -15,10 +19,9 @@ exports.handler = async (event) => {
         const { firstName, lastName, email, password } = JSON.parse(event.body);
 
         const checkUser = await docClient.send(
-            new QueryCommand({
+            new ScanCommand({
                 TableName: process.env.USERS_TABLE,
-                IndexName: 'EmailIndex',
-                KeyConditionExpression: 'email = :email',
+                FilterExpression: 'email = :email',
                 ExpressionAttributeValues: {
                     ':email': email,
                 },

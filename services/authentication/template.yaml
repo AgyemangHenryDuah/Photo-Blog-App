@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: "2010-09-09"
+AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: Photo Blog App - Authentication Service with API Gateway Integration
 
@@ -282,7 +282,7 @@ Resources:
     GetUserInfoFunction:
         Type: AWS::Serverless::Function
         Properties:
-            CodeUri: src/get-user/
+            CodeUri: src/get-current-user/
             Handler: index.handler
             Description: Gets the current user's information
             Layers:
@@ -301,7 +301,7 @@ Resources:
                     Type: Api
                     Properties:
                         RestApiId: !Ref AuthApiGateway
-                        Path: /get-user
+                        Path: /get-current-user
                         Method: get
                         Auth:
                             Authorizer: CognitoAuthorizer

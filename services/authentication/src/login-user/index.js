@@ -5,7 +5,7 @@ const {
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const {
     DynamoDBDocumentClient,
-    QueryCommand,
+    ScanCommand,
 } = require('@aws-sdk/lib-dynamodb');
 
 const cognito = new CognitoIdentityProviderClient({});
@@ -42,9 +42,9 @@ exports.handler = async (event) => {
 
         // Fetch user data from DynamoDB
         const result = await ddbClient.send(
-            new QueryCommand({
+            new ScanCommand({
                 TableName: process.env.USERS_TABLE,
-                KeyConditionExpression: 'email = :email',
+                FilterExpression: 'email = :email',
                 ExpressionAttributeValues: {
                     ':email': email,
                 },
