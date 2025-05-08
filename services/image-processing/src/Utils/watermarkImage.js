@@ -3,7 +3,7 @@ const { Buffer } = require("buffer");
 
 const getTextBuffer = async (text) => {
   return Buffer.from(
-    `<svg width="500" height="80">
+    `<svg width="500" height="85">
         <style>
           .title { fill: white; font-size: 24px; font-weight: bold;}
         </style>
