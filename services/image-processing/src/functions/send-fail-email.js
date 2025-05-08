@@ -1,9 +1,3 @@
-// Get user email from database
-
-//Generate email subject
-
-//Send email to user
-
 exports.handler = async (event) => {
   try {
     const { imageId, errorMessage } = JSON.parse(event.body);
