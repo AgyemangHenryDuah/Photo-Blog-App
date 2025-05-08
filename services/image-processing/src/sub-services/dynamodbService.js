@@ -18,7 +18,9 @@ class DynamoService {
             TableName: TABLE_NAME,
             Key: { imageId }
         });
-        return docClient.send(command);
+        const result = await docClient.send(command)
+
+        return result.Item;
     }
 
     static async updateImageMetadata(imageId, updateExpression, expressionAttributeValues) {
