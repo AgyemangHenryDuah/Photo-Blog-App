@@ -20,5 +20,6 @@ template_file = "template.yaml"
 # TO USE THIS FILE TO DEPLOY YOUR INDEPENDENT SERVICE, run the following commands the project's root directory:
 #
 # cd services/photo-management
+# sam validate && sam validate --lint
 # sam build --config-file deploy.toml --config-env photo-management
 # sam deploy --config-file deploy.toml --config-env photo-management
