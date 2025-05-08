@@ -26,9 +26,9 @@ Resources:
         - email
       UsernameAttributes:
         - email
-      EmailConfiguration:
-        EmailSendingAccount: DEVELOPER #
-        SourceArn: !Sub arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/noreply@${DomainName}
+      # EmailConfiguration:
+      #   EmailSendingAccount: DEVELOPER
+      #   SourceArn: !Sub arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/noreply@${DomainName}
       Schema:
         - Name: email
           AttributeDataType: String
@@ -38,15 +38,15 @@ Resources:
           AttributeDataType: String
           Mutable: true
           Required: true
-      LambdaConfig:
-        PostConfirmation: !GetAtt PostConfirmationFunction.Arn
+      # LambdaConfig:
+      #   PostConfirmation: !GetAtt PostConfirmationFunction.Arn
       # Enable password recovery and MFA for security
       AdminCreateUserConfig:
         AllowAdminCreateUserOnly: false
-      AccountRecoverySetting:
-        RecoveryMechanisms:
-          - Name: verified_email
-            Priority: 1
+      # AccountRecoverySetting:
+      #   RecoveryMechanisms:
+      #     - Name: verified_email
+      #       Priority: 1
 
   # Cognito App Client
   UserPoolClient:
@@ -72,29 +72,29 @@ Resources:
       PreventUserExistenceErrors: ENABLED
 
   # SES Email Identity
-  EmailIdentity:
-    Type: AWS::SES::EmailIdentity
-    Properties:
-      EmailIdentity: !Sub noreply@${DomainName}
+  # EmailIdentity:
+  #   Type: AWS::SES::EmailIdentity
+  #   Properties:
+  #     EmailIdentity: !Sub noreply@${DomainName}
 
   # Lambda for user signup confirmation
-  PostConfirmationFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: src/post-confirmation/
-      Handler: index.handler
-      Description: Handles post confirmation tasks for new users
-      Layers:
-        - !Ref SharedLayerArn  # Use the parameter directly
-      Policies:
-        - AmazonSESFullAccess
-        - AWSLambdaBasicExecutionRole
-        - DynamoDBCrudPolicy:
-            TableName: !Ref UsersTable
-      Environment:
-        Variables:
-          USERS_TABLE: !Ref UsersTable
-          FROM_EMAIL: !Sub noreply@${DomainName}
+  # PostConfirmationFunction:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     CodeUri: src/post-confirmation/
+  #     Handler: index.handler
+  #     Description: Handles post confirmation tasks for new users
+  #     Layers:
+  #       - !Ref SharedLayerArn  # Use the parameter directly
+  #     Policies:
+  #       - AmazonSESFullAccess
+  #       - AWSLambdaBasicExecutionRole
+  #       - DynamoDBCrudPolicy:
+  #           TableName: !Ref UsersTable
+  #     Environment:
+  #       Variables:
+  #         USERS_TABLE: !Ref UsersTable
+  #         FROM_EMAIL: !Sub noreply@${DomainName}
 
 
   # Users Database
@@ -163,7 +163,8 @@ Resources:
       Cors:
         AllowMethods: "'POST, GET, OPTIONS'"
         AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-        AllowOrigin: !Sub "'https://${DomainName}'"
+        AllowOrigin: !Sub "'*'"
+        # AllowOrigin: !Sub "'https://${DomainName}'"
         MaxAge: "'600'"
 
   # Lambda Functions for API Gateway Endpoints
