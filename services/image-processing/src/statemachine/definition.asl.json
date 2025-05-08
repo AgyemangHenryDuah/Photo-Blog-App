@@ -1,5 +1,5 @@
 {
-    "Comment": "Image Processing Workflow",
+    "Comment": "Image Processing Workflow (Basic Version)",
     "StartAt": "ProcessImage",
     "States": {
         "ProcessImage": {
@@ -11,6 +11,9 @@
                 "WaitTimeSeconds": 20
             },
             "Next": "ExtractMetadata",
+            "ResultSelector": {
+                "body.$": "States.StringToJson($.Messages[0].Body)"
+            },
             "Retry": [
                 {
                     "ErrorEquals": [
@@ -26,6 +29,7 @@
             "Type": "Task",
             "Resource": "${ExtractMetadataArn}",
             "Next": "SendStartNotification",
+            "ResultPath": "$.body",
             "Retry": [
                 {
                     "ErrorEquals": [
@@ -43,6 +47,7 @@
             "Type": "Task",
             "Resource": "${SendStartNotificationArn}",
             "Next": "ApplyWatermark",
+            "ResultPath": "$.body",
             "Retry": [
                 {
                     "ErrorEquals": [
@@ -58,6 +63,7 @@
             "Type": "Task",
             "Resource": "${ApplyWatermarkArn}",
             "Next": "UpdateDatabaseStatus",
+            "ResultPath": "$.body",
             "Retry": [
                 {
                     "ErrorEquals": [
@@ -82,6 +88,7 @@
             "Type": "Task",
             "Resource": "${UpdateDatabaseStatusArn}",
             "Next": "CleanupOriginal",
+            "ResultPath": "$.body",
             "Retry": [
                 {
                     "ErrorEquals": [
@@ -97,6 +104,7 @@
             "Type": "Task",
             "Resource": "${CleanupOriginalArn}",
             "Next": "SendFinalNotification",
+            "ResultPath": "$.body",
             "Retry": [
                 {
                     "ErrorEquals": [
@@ -112,6 +120,7 @@
             "Type": "Task",
             "Resource": "${SendFinalNotificationArn}",
             "End": true,
+            "ResultPath": "$.body",
             "Retry": [
                 {
                     "ErrorEquals": [
@@ -125,13 +134,17 @@
         },
         "NotifyFailure": {
             "Type": "Task",
-            "Resource": "${SendFinalNotificationArn}",
+            "Resource": "${SendFailEmailArn}",
             "Parameters": {
                 "body": {
-                    "userEmail.$": "$.body.userEmail",
-                    "imageId.$": "$.body.imageId",
-                    "originalFilename.$": "$.body.originalFilename",
-                    "error.$": "$.error"
+                    "userInfo": {
+                        "email.$": "$.body.userEmail",
+                        "firstname.$": "$.body.firstName"
+                    },
+                    "imageInfo": {
+                        "imageId.$": "$.body.imageId",
+                        "imageName.$": "$.body.imageName"
+                    }
                 }
             },
             "End": true
