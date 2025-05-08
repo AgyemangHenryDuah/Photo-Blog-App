@@ -108,32 +108,32 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonS3FullAccess
 
   # Nested stacks for each service
-  AuthServiceStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      TemplateURL: ./services/authentication/template.yaml
-      Parameters:
-        Environment: !Ref Environment
-        DomainName: !Ref DomainName
-        SharedLayerArn: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/shared-layer}}'
+  # AuthServiceStack:
+  #   Type: AWS::CloudFormation::Stack
+  #   Properties:
+  #     TemplateURL: ./services/authentication/template.yaml
+  #     Parameters:
+  #       Environment: !Ref Environment
+  #       DomainName: !Ref DomainName
+  #       SharedLayerArn: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/shared-layer}}'
 
-  ImageProcessingStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      TemplateURL: ./services/image-processing/template.yaml
-      Parameters:
-        Environment: !Ref Environment
-        ProcessedBucketName: !Ref ProcessedImagesBucket
-        SharedLayerArn: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/shared-layer}}'
+  # ImageProcessingStack:
+  #   Type: AWS::CloudFormation::Stack
+  #   Properties:
+  #     TemplateURL: ./services/image-processing/template.yaml
+  #     Parameters:
+  #       Environment: !Ref Environment
+  #       ProcessedBucketName: !Ref ProcessedImagesBucket
+  #       SharedLayerArn: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/shared-layer}}'
 
-  PhotoManagementStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      TemplateURL: ./services/photo-management/template.yaml
-      Parameters:
-        Environment: !Ref Environment
-        ProcessedBucketName: !Ref ProcessedImagesBucket
-        SharedLayerArn: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/shared-layer}}'
+  # PhotoManagementStack:
+  #   Type: AWS::CloudFormation::Stack
+  #   Properties:
+  #     TemplateURL: ./services/photo-management/template.yaml
+  #     Parameters:
+  #       Environment: !Ref Environment
+  #       ProcessedBucketName: !Ref ProcessedImagesBucket
+  #       SharedLayerArn: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/shared-layer}}'
 
 Outputs:
   ProcessedImagesBucketName:
