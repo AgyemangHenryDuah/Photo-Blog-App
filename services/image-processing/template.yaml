@@ -142,16 +142,6 @@ Resources:
           Projection:
             ProjectionType: ALL
 
-  # Layer for image processing libraries (Sharp)
-  ImageProcessingLayer:
-    Type: AWS::Serverless::LayerVersion
-    Properties:
-      LayerName: !Sub photo-blog-app-image-processing-layer-${Environment}
-      Description: Layer containing image processing libraries
-      ContentUri: ../../common/layers/image-processing/
-      CompatibleRuntimes:
-        - nodejs20.x
-      RetentionPolicy: Retain
 
   # DR Backup bucket in secondary region
   StagingBucket:
