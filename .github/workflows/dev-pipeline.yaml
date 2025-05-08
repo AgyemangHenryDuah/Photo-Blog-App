@@ -44,8 +44,8 @@ jobs:
           cd common/layers/nodejs
           npm i
           ls -la node_modules
-
-          cd common/layers/image-processing
+        run: |
+          cd ../image-processing
           npm i
           ls -la node_modules
       
