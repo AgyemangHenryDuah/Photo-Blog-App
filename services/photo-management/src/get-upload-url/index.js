@@ -1,17 +1,24 @@
+const AWS = require('aws-sdk');
+const { createResponse, parseBody, handleError } = require('/opt/nodejs/shared-utils');
+
 
 exports.handler = async (event) => {
 
-    console.log('HURRAY...!!! Let the work begin <----->', event);
+    try {
 
-    return {
-        statusCode: 200,
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            info: 'It worked!', 
-            message: 'Welcome...! This is PBA :)'
-        })
+        console.log('This works!', parseBody);
+
+        console.log('Exploring API Event object: ' , event);
+
+        const responseBody = {
+            info: 'Success',
+            message: 'Api Gateway - Routes working successfully...!'
+        }
+
+        return createResponse(200, responseBody);
+
+    } catch (error) {
+        return handleError(error)
     }
 }
 

@@ -43,6 +43,11 @@ jobs:
         run: |
           cd common/layers/nodejs
           npm i
+          ls -la node_modules
+
+          cd common/layers/image-processing
+          npm i
+          ls -la node_modules
       
       # Store DR region in Parameter Store
       - name: Set DR Region Parameter
