@@ -40,6 +40,17 @@ class DynamoService {
         return docClient.send(command);
     }
 
+    static async getUserDetails(userId) {
+        const command = new AdminGetUserCommand({
+            UserPoolId: process.env.USER_POOL_ID,
+            Username: userId
+        })
+        const response = await cognitoClient.send(command);
+        const emailAttr = response.UserAttributes.find(attr => attr.Name === 'email');
+        const usernameAttr = response.UserAttributes.find(attr => attr.Name === 'preferred_username');
+        const lastNameAttr = response.UserAttributes.find(attr => attr.Name === 'family_name');
+        return { email: emailAttr.Value, firstname: usernameAttr.Value, lastname: lastNameAttr.Value };
+    }
 }
 
 module.exports = DynamoService;
