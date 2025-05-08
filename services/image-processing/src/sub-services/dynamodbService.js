@@ -40,12 +40,13 @@ class DynamoService {
         return docClient.send(command);
     }
 
-    static async getUserEmail(userID) {
+    static async getUserDetails(userId) { 
         const command = new GetCommand({
             TableName: TABLE_NAME,
-            Key: { userID }
+            Key: { userId }
         });
-        return docClient.send(command);
+        const result = await docClient.send(command);
+        return result.Item;
     }
 }
 
