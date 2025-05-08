@@ -85,6 +85,64 @@ Resources:
       - DynamoDBWritePolicy:
           TableName: !Ref PhotosTable
   
+
+  ApplyWatermarkFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: apply-watermark.handler
+      CodeUri: src/functions/
+      Description: Applies water mark to images
+      Policies:
+          - S3ReadPolicy:
+              BucketName: !Ref StagingBucketName
+          - S3WritePolicy:
+              BucketName: !Ref ProcessedBucketName
+  
+
+  DeleteOriginalImageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: dlete-original-image.handler
+      CodeUri: src/functions/
+      Description: Cleans up Original images from staging bucket
+      Policies:
+        - S3DeletePolicy:
+            BucketName: !Ref StagingBucketName
+
+  
+  SendStartEmailFunction:
+    pe: AWS::Serverless::Function
+    Properties:
+      Handler: send-start-email.handler
+      CodeUri: src/functions/
+      Description: Sends email to user when image processing starts
+      Policies:
+        - SESSendEmailPolicy:
+            IdentityName: !Sub "notify@photo-blog-${Environment}.com"
+  
+
+  SendFailedEmailFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: send-failed-email.handler
+      CodeUri: src/functions/
+      Description: Sends email to user when image processing fails
+      Policies:
+        - SESSendEmailPolicy:
+            IdentityName: !Sub "notify@photo-blog-${Environment}.com"
+    
+  SendSuccessEmailFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: send-success-email.handler
+      CodeUri: src/functions/
+      Description: Sends email to user when image processing succeeds
+      Policies:
+        - SESSendEmailPolicy:
+            IdentityName: !Sub "notify@photo-blog-${Environment}.com"
+    
+
+  
   # Step Functions State Machine
   ImageProcessingStateMachine:
     Type: AWS::Serverless::StateMachine
@@ -93,6 +151,11 @@ Resources:
       DefinitionSubstitutions:
         ExtractMetadataFunctionArn: !GetAtt ExtractMetaDataFunction.Arn
         UpdateMetadataFunctionArn: !GetAtt UpdateMetadataFunction.Arn
+        ApplyWatermarkFunctionArn: !GetAtt ApplyWatermarkFunction.Arn
+        DeleteOriginalImageFunctionArn: !GetAtt DeleteOriginalImageFunction.Arn
+        SendStartEmailFunctionArn: !GetAtt SendStartEmailFunction.Arn
+        SendFailedEmailFunctionArn: !GetAtt SendFailedEmailFunction.Arn
+        SendSuccessEmailFunctionArn: !GetAtt SendSuccessEmailFunction.Arn
       Policies:
         - LambdaInvokePolicy:
             FunctionName: !Ref ExtractMetaDataFunction
@@ -164,23 +227,3 @@ Outputs:
     Value: !Ref ImageProcessingStateMachine
   ImageProcessingStateMachineArn:
     Value: !GetAtt ImageProcessingStateMachine.Arn
-
-  
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
