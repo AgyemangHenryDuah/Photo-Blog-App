@@ -1,24 +1,27 @@
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
-const { createResponse, parseBody, handleError } = require('../../../../common/shared-utils');
+// const { createResponse, parseBody, handleError } = require('../../../../common/shared-utils');
 
 
 exports.handler = async (event) => {
-
-    try {
-
-        console.log('This works!', parseBody);
-
-        console.log('Exploring API Event object: ' , event);
 
         const responseBody = {
             info: 'Success',
             message: 'Api Gateway - Routes working successfully...!'
         }
 
-        return createResponse(200, responseBody);
 
-    } catch (error) {
-        return handleError(error)
-    }
+        return {
+            statusCode: 200,
+            headers: {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-Amz-Date,X-Api-Key',
+                'Access-Control-Allow-Credentials': true,
+                'Content-Type': 'application/json'
+              },
+            body: JSON.stringify(responseBody);
+
+        }
+
 }
 
