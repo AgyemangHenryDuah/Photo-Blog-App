@@ -136,12 +136,12 @@ Resources:
       DefinitionUri: src/statemachine/definition.asl.json
       DefinitionSubstitutions:
         ExtractMetadataFunctionArn: !GetAtt ExtractMetaDataFunction.Arn
-        UpdateMetadataFunctionArn: !GetAtt UpdateMetadataFunction.Arn
+        SendStartNotificationFunctionArn: !GetAtt SendStartNotificationFunction.Arn
         ApplyWatermarkFunctionArn: !GetAtt ApplyWatermarkFunction.Arn
-        DeleteOriginalImageFunctionArn: !GetAtt DeleteOriginalImageFunction.Arn
-        SendStartEmailFunctionArn: !GetAtt SendStartEmailFunction.Arn
-        SendFailedEmailFunctionArn: !GetAtt SendFailedEmailFunction.Arn
-        SendSuccessEmailFunctionArn: !GetAtt SendSuccessEmailFunction.Arn
+        UpdateDatabaseStatusFunctionArn: !GetAtt UpdateDatabaseStatusFunction.Arn
+        CleanupOriginalFunctionArn: !GetAtt CleanupOriginalFunction.Arn
+        SendFinalNotificationFunctionArn: !GetAtt SendFinalNotificationFunction.Arn
+        SendFailEmailFunctionArn: !GetAtt SendFailEmailFunction.Arn
       Policies:
         - LambdaInvokePolicy:
             FunctionName: !Ref ExtractMetaDataFunction
