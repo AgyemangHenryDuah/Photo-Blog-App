@@ -12,7 +12,6 @@
     "@aws-sdk/client-cognito-identity-provider": "^3.804.0",
     "@aws-sdk/client-lambda": "^3.504.0",
     "@aws-sdk/client-cloudwatch": "^3.504.0",
-    "@aws-sdk/client-route53": "^3.504.0",
     "@aws-sdk/util-create-request": "^3.504.0",
     "@aws-sdk/signature-v4": "^3.504.0",
     "@aws-sdk/util-dynamodb": "^3.504.0",
