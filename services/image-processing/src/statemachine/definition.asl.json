@@ -1,35 +1,12 @@
 {
-    "Comment": "Image Processing Workflow (Basic Version)",
-    "StartAt": "ProcessImage",
+    "Comment": "Image Processing Workflow (Revised Version)",
+    "StartAt": "ExtractMetadata",
     "States": {
-        "ProcessImage": {
-            "Type": "Task",
-            "Resource": "arn:aws:states:::sqs:receiveMessage",
-            "Parameters": {
-                "QueueUrl": "${ImageProcessingQueue}",
-                "MaxNumberOfMessages": 1,
-                "WaitTimeSeconds": 20
-            },
-            "Next": "ExtractMetadata",
-            "ResultSelector": {
-                "body.$": "States.StringToJson($.Messages[0].Body)"
-            },
-            "Retry": [
-                {
-                    "ErrorEquals": [
-                        "States.ALL"
-                    ],
-                    "IntervalSeconds": 5,
-                    "MaxAttempts": 3,
-                    "BackoffRate": 2
-                }
-            ]
-        },
         "ExtractMetadata": {
             "Type": "Task",
-            "Resource": "${ExtractMetadataArn}",
+            "Resource": "${ExtractMetadataFunctionArn}",
             "Next": "SendStartNotification",
-            "ResultPath": "$.body",
+            "ResultPath": "$.metadata",
             "Retry": [
                 {
                     "ErrorEquals": [
@@ -41,13 +18,21 @@
                     "MaxAttempts": 3,
                     "BackoffRate": 2
                 }
+            ],
+            "Catch": [
+                {
+                    "ErrorEquals": [
+                        "States.ALL"
+                    ],
+                    "Next": "NotifyFailure"
+                }
             ]
         },
         "SendStartNotification": {
             "Type": "Task",
-            "Resource": "${SendStartNotificationArn}",
+            "Resource": "${SendStartNotificationFunctionArn}",
             "Next": "ApplyWatermark",
-            "ResultPath": "$.body",
+            "ResultPath": "$.startNotificationResult",
             "Retry": [
                 {
                     "ErrorEquals": [
@@ -57,13 +42,21 @@
                     "MaxAttempts": 2,
                     "BackoffRate": 2
                 }
+            ],
+            "Catch": [
+                {
+                    "ErrorEquals": [
+                        "States.ALL"
+                    ],
+                    "Next": "NotifyFailure"
+                }
             ]
         },
         "ApplyWatermark": {
             "Type": "Task",
-            "Resource": "${ApplyWatermarkArn}",
+            "Resource": "${ApplyWatermarkFunctionArn}",
             "Next": "UpdateDatabaseStatus",
-            "ResultPath": "$.body",
+            "ResultPath": "$.watermarkResult",
             "Retry": [
                 {
                     "ErrorEquals": [
@@ -86,9 +79,9 @@
         },
         "UpdateDatabaseStatus": {
             "Type": "Task",
-            "Resource": "${UpdateDatabaseStatusArn}",
+            "Resource": "${UpdateDatabaseStatusFunctionArn}",
             "Next": "CleanupOriginal",
-            "ResultPath": "$.body",
+            "ResultPath": "$.updateDBResult",
             "Retry": [
                 {
                     "ErrorEquals": [
@@ -97,14 +90,22 @@
                     "IntervalSeconds": 2,
                     "MaxAttempts": 3,
                     "BackoffRate": 2
+                }
+            ],
+            "Catch": [
+                {
+                    "ErrorEquals": [
+                        "States.ALL"
+                    ],
+                    "Next": "NotifyFailure"
                 }
             ]
         },
         "CleanupOriginal": {
             "Type": "Task",
-            "Resource": "${CleanupOriginalArn}",
+            "Resource": "${CleanupOriginalFunctionArn}",
             "Next": "SendFinalNotification",
-            "ResultPath": "$.body",
+            "ResultPath": "$.cleanupResult",
             "Retry": [
                 {
                     "ErrorEquals": [
@@ -114,13 +115,21 @@
                     "MaxAttempts": 3,
                     "BackoffRate": 2
                 }
+            ],
+            "Catch": [
+                {
+                    "ErrorEquals": [
+                        "States.ALL"
+                    ],
+                    "Next": "NotifyFailure"
+                }
             ]
         },
         "SendFinalNotification": {
             "Type": "Task",
-            "Resource": "${SendFinalNotificationArn}",
+            "Resource": "${SendFinalNotificationFunctionArn}",
             "End": true,
-            "ResultPath": "$.body",
+            "ResultPath": "$.finalNotificationResult",
             "Retry": [
                 {
                     "ErrorEquals": [
@@ -130,24 +139,32 @@
                     "MaxAttempts": 2,
                     "BackoffRate": 2
                 }
+            ],
+            "Catch": [
+                {
+                    "ErrorEquals": [
+                        "States.ALL"
+                    ],
+                    "Next": "NotifyFailure"
+                }
             ]
         },
         "NotifyFailure": {
             "Type": "Task",
-            "Resource": "${SendFailEmailArn}",
+            "Resource": "${SendFailEmailFunctionArn}",
+            "End": true,
             "Parameters": {
                 "body": {
                     "userInfo": {
-                        "email.$": "$.body.userEmail",
-                        "firstname.$": "$.body.firstName"
+                        "email.$": "$.metadata.userEmail",
+                        "firstname.$": "$.metadata.firstName"
                     },
                     "imageInfo": {
-                        "imageId.$": "$.body.imageId",
-                        "imageName.$": "$.body.imageName"
+                        "imageId.$": "$.metadata.imageId",
+                        "imageName.$": "$.metadata.imageName"
                     }
                 }
-            },
-            "End": true
+            }
         }
     }
 }
