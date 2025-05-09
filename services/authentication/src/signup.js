@@ -23,7 +23,7 @@ exports.handler = async (event) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     message:
-                        'Missing required fields: username, firstName, lastName, password, and email are required',
+                        'Missing required fields: username, firstName, lastName, password, and email',
                 }),
             };
         }
