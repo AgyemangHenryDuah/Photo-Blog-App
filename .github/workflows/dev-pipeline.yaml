@@ -42,10 +42,10 @@ jobs:
       - name: Install shared layer dependencies
         run: |
           cd common/layers/nodejs
-          npm i  
-          mkdir -p nodejs
-          cp -r node_modules nodejs/
+          npm i
+          cd ..
           zip -r layer_content.zip nodejs
+          ls
 
           # Publish the layer
           LAYER_VERSION=$(aws lambda publish-layer-version \

@@ -4,6 +4,11 @@ const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, PutCommand } = require('@aws-sdk/lib-dynamodb');
 const { v4: uuidv4 } = require('uuid');
 
+const { createResponse, parseBody, handleError } = require('/opt/nodejs/shared-utils/eventHandler.js');
+
+console.log('CREATE RESPONSE OBJECT: ', createResponse);
+console.log('S3 CLIENT OBJECT: ', S3Client);
+
 // Initialize clients
 const s3Client = new S3Client({ region: process.env.PRIMARY_REGION });
 const ddbClient = new DynamoDBClient({ region: process.env.PRIMARY_REGION });
@@ -27,11 +32,11 @@ exports.handler = async (event) => {
     // user ID 
     const userId = event.requestContext.authorizer.claims.sub;
 
-    // Generating image ID
-    const imageId = uuidv4();
+    // Generating photo ID
+    const photoId = uuidv4();
     
     // S3 key with user ID path
-    const s3Key = `users/${userId}/${imageId}${fileExtension}`;
+    const s3Key = `users/${userId}/${photoId}${fileExtension}`;
     
     // Create command for pre-signed URL
     const putObjectCommand = new PutObjectCommand({
@@ -40,7 +45,7 @@ exports.handler = async (event) => {
       ContentType: requestBody.fileType || 'image/jpeg',
       Metadata: {
         'user-id': userId,
-        'image-id': imageId
+        'photo-id': photoId
       }
     });
     
@@ -52,10 +57,10 @@ exports.handler = async (event) => {
     const timestamp = Date.now();
     
     // Create pending record
-    const imageRecord = {
-      imageId,
+    const photoRecord = {
+      photoId,
       userId,
-      imageName: requestBody.fileName || `Image-${imageId}`,
+      photoName: requestBody.fileName || `Image-${photoId}`,
       title: requestBody.title,
       description: requestBody.description || '',
       s3Key,
@@ -74,11 +79,11 @@ exports.handler = async (event) => {
     await ddbDocClient.send(
       new PutCommand({
         TableName: PHOTOS_TABLE,
-        Item: imageRecord
+        Item: photoRecord
       })
     );
     
-    // Return pre-signed URL and image ID
+    // Return pre-signed URL and photo ID
     return {
       statusCode: 200,
       headers: {
@@ -87,7 +92,7 @@ exports.handler = async (event) => {
         'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
       },
       body: JSON.stringify({
-        imageId,
+        photoId,
         uploadUrl: presignedUrl,
         expiresIn: URL_EXPIRATION,
         key: s3Key
