@@ -1,5 +1,5 @@
 {
-    "Comment": "Image Processing Workflow (Revised Version)",
+    "Comment": "Image Processing Workflow",
     "StartAt": "ExtractMetadata",
     "States": {
         "ExtractMetadata": {
@@ -26,7 +26,8 @@
                     ],
                     "Next": "NotifyFailure"
                 }
-            ]
+            ],
+            "TimeoutSeconds": 30
         },
         "SendStartNotification": {
             "Type": "Task",
@@ -50,7 +51,8 @@
                     ],
                     "Next": "NotifyFailure"
                 }
-            ]
+            ],
+            "TimeoutSeconds": 30
         },
         "ApplyWatermark": {
             "Type": "Task",
@@ -75,7 +77,8 @@
                     "Next": "NotifyFailure",
                     "ResultPath": "$.error"
                 }
-            ]
+            ],
+            "TimeoutSeconds": 60
         },
         "UpdateDatabaseStatus": {
             "Type": "Task",
@@ -99,7 +102,8 @@
                     ],
                     "Next": "NotifyFailure"
                 }
-            ]
+            ],
+            "TimeoutSeconds": 30
         },
         "CleanupOriginal": {
             "Type": "Task",
@@ -123,7 +127,8 @@
                     ],
                     "Next": "NotifyFailure"
                 }
-            ]
+            ],
+            "TimeoutSeconds": 30
         },
         "SendFinalNotification": {
             "Type": "Task",
@@ -147,7 +152,8 @@
                     ],
                     "Next": "NotifyFailure"
                 }
-            ]
+            ],
+            "TimeoutSeconds": 30
         },
         "NotifyFailure": {
             "Type": "Task",
@@ -162,9 +168,11 @@
                     "imageInfo": {
                         "imageId.$": "$.metadata.imageId",
                         "imageName.$": "$.metadata.imageName"
-                    }
+                    },
+                    "error.$": "$.error"
                 }
-            }
+            },
+            "TimeoutSeconds": 30
         }
     }
 }

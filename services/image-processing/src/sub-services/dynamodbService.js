@@ -31,7 +31,7 @@ class DynamoService {
 
     static async getUserDetails(userId) {
         const command = {
-            TABLE_NAME: process.env.USER_TABLE,
+            TABLE_NAME: process.env.USERS_TABLE,
             Key: { userId: userId },
             ProjectionExpression: "userId, email, firstname, lastname"
         }
