@@ -313,6 +313,12 @@ Outputs:
     Value: !Ref UserPoolClient
     Export:
       Name: !Sub ${AWS::StackName}-UserPoolClientId
+
+  UsersTableName:
+    Description: DynamoDB table for users
+    Value: !Ref UsersTable
+    Export:
+      Name: !Sub ${AWS::StackName}-UsersTable
       
   ApiGatewayUrl:
     Description: Auth API Gateway URL
