@@ -13,38 +13,8 @@ Parameters:
   SharedLayerArn:
     Type: String
 
+
 Resources:
-  
-  # Photos metadata table
-  PhotosTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      TableName: !Sub photo-blog-photos-${Environment}
-      BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-        - AttributeName: userId
-          AttributeType: S
-        - AttributeName: photoId
-          AttributeType: S
-      KeySchema:
-        - AttributeName: userId
-          KeyType: HASH
-        - AttributeName: photoId
-          KeyType: RANGE
-      GlobalSecondaryIndexes:
-        - IndexName: PhotosByStatus
-          KeySchema:
-            - AttributeName: photoId
-              KeyType: HASH
-          Projection:
-            ProjectionType: ALL
-      # DR Replication to backup region
-      GlobalTableConfiguration:
-        ReplicationGroup:
-          - Region: !Ref AWS::Region
-          - Region: !Sub '{{resolve:ssm:/photo-blog/${Environment}/dr-region}}'
-  
-  # SQS Queue for image processing
   ImageProcessingQueue:
     Type: AWS::SQS::Queue
     Properties:
@@ -54,96 +24,112 @@ Resources:
         deadLetterTargetArn: !GetAtt ImageProcessingDLQ.Arn
         maxReceiveCount: 3
 
-  # Dead Letter Queue for failed processing
+
   ImageProcessingDLQ:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub photo-blog-image-processing-dlq-${Environment}
       MessageRetentionPeriod: 1209600  # 14 days
-  
-  # Lambda function to Extract Metadata for image processing
+
+
   ExtractMetaDataFunction:
     Type: AWS::Serverless::Function
     Properties:
+      Runtime: nodejs22.x
+      MemorySize: 128
       Handler: extract-metadata.handler
       CodeUri: src/functions/
       Description: Makes DB queries to extract all needed metadata for the image processing workflow
-      Policies:
-        - DynamoDBReadPolicy:
-            TableName: !Ref PhotosTable
-        - SQSPollerPolicy:
-            QueueName: !Ref ImageProcessingQueue
   
-  # Lambda function to update metadata after successful image processing
+
   UpdateMetadataFunction:
-    Type: AWS::Severless::Function
+    Type: AWS::Serverless::Function
     Properties:
-    Handler: update-metadata.handler
-    CodeUri: src/functions/
-    Description: Makes DB writings to update image processing status
-    Policies:
-      - DynamoDBWritePolicy:
-          TableName: !Ref PhotosTable
-  
+      Runtime: nodejs22.x
+      MemorySize: 128
+      Timeout: 30
+      Handler: update-metadata.handler
+      CodeUri: src/functions/
+      Description: Makes DB writings to update image processing status
+    
 
   ApplyWatermarkFunction:
     Type: AWS::Serverless::Function
     Properties:
       Handler: apply-watermark.handler
       CodeUri: src/functions/
-      Description: Applies water mark to images
+      Description: Applies watermark to images
       Policies:
-          - S3ReadPolicy:
-              BucketName: !Ref StagingBucketName
-          - S3WritePolicy:
-              BucketName: !Ref ProcessedBucketName
-  
+        - S3ReadPolicy:
+            BucketName: !Ref StagingBucketName
+        - S3WritePolicy:
+            BucketName: !Ref ProcessedBucketName
+      Environment:
+        Variables:
+          STAGING_BUCKET: !Ref StagingBucketName
+          PROCESSED_BUCKET: !Ref ProcessedBucketName
 
+    
   DeleteOriginalImageFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: dlete-original-image.handler
+      Handler: delete-original-image.handler
       CodeUri: src/functions/
-      Description: Cleans up Original images from staging bucket
+      Description: Deletes original image from staging bucket
       Policies:
-        - S3DeletePolicy:
-            BucketName: !Ref StagingBucketName
+        - AmazonS3FullAccess
+        - AmazonSESFullAccess
+      Environment:
+        Variables:
+          STAGING_BUCKET: !Ref StagingBucketName
 
   
   SendStartEmailFunction:
-    pe: AWS::Serverless::Function
+    Type: AWS::Serverless::Function
     Properties:
       Handler: send-start-email.handler
       CodeUri: src/functions/
-      Description: Sends email to user when image processing starts
+      Description: Notify user when processing starts
       Policies:
-        - SESSendEmailPolicy:
-            IdentityName: !Sub "notify@photo-blog-${Environment}.com"
-  
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendRawEmail
+              Resource: "*"
 
   SendFailedEmailFunction:
     Type: AWS::Serverless::Function
     Properties:
       Handler: send-failed-email.handler
       CodeUri: src/functions/
-      Description: Sends email to user when image processing fails
+      Description: Notify user on processing failure
       Policies:
-        - SESSendEmailPolicy:
-            IdentityName: !Sub "notify@photo-blog-${Environment}.com"
-    
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendRawEmail
+              Resource: "*"
+
   SendSuccessEmailFunction:
     Type: AWS::Serverless::Function
     Properties:
       Handler: send-success-email.handler
       CodeUri: src/functions/
-      Description: Sends email to user when image processing succeeds
+      Description: Notify user on processing success
       Policies:
-        - SESSendEmailPolicy:
-            IdentityName: !Sub "notify@photo-blog-${Environment}.com"
-    
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendRawEmail
+              Resource: "*"
 
   
-  # Step Functions State Machine
   ImageProcessingStateMachine:
     Type: AWS::Serverless::StateMachine
     Properties:
@@ -161,31 +147,39 @@ Resources:
             FunctionName: !Ref ExtractMetaDataFunction
         - LambdaInvokePolicy:
             FunctionName: !Ref UpdateMetadataFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref ApplyWatermarkFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref DeleteOriginalImageFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref SendStartEmailFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref SendFailedEmailFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref SendSuccessEmailFunction
         - SQSPollerPolicy:
             QueueName: !Ref ImageProcessingQueue
-  
 
-  #EventBridge Rile to Trigger Step Function on SQS
   ProcessImageRule:
-    Type: AWS:Events::Rule
+    Type: AWS::Events::Rule
     Properties:
       EventPattern:
         source:
           - aws.sqs
         detail-type:
-          - AWS API Call Via CLoudTrail
+          - AWS API Call Via CloudTrail
         detail:
           eventSource:
             - sqs.amazonaws.com
           eventName:
-            - RecieveMessage
+            - ReceiveMessage
           resources:
             - !GetAtt ImageProcessingQueue.Arn
       Targets:
         - Arn: !Ref ImageProcessingStateMachine
           Id: "TriggerImageProcessing"
           RoleArn: !GetAtt EventBridgeRole.Arn
-  
+
   EventBridgeRole:
     Type: AWS::IAM::Role
     Properties:
@@ -200,7 +194,7 @@ Resources:
               - sts:AssumeRole
       Policies:
         - PolicyName: InvokeStepFunctionPolicy
-          PolicyDocument: 
+          PolicyDocument:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
@@ -209,21 +203,4 @@ Resources:
                 Resource:
                   - !Ref ImageProcessingStateMachine
 Outputs:
-  StagingBucketName:
-    Value: !Ref StagingBucketName
-  ProcessedBucketName:
-    Value: !Ref ProcessedBucketName
-  PhotosTableName:
-    Value: !Ref PhotosTable
-  PhotosTableArn:
-    Value: !GetAtt PhotosTable.Arn
-  SharedLayerArn:
-    Value: !Ref SharedLayerArn
-  ImageProcessingQueue:
-    Value: !Ref ImageProcessingQueue
-  ImageProcessingDLQ:
-    Value: !Ref ImageProcessingDLQ
-  ImageProcessingStateMachine:
-    Value: !Ref ImageProcessingStateMachine
-  ImageProcessingStateMachineArn:
-    Value: !GetAtt ImageProcessingStateMachine.Arn
+ 
