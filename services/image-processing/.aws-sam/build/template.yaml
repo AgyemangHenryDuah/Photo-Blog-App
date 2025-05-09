@@ -17,9 +17,13 @@ Parameters:
     Default: noreply@example.com
 Globals:
   Function:
-    Timeout: 30
     Runtime: nodejs22.x
-    MemorySize: 256
+    Timeout: 30
+    Tracing: Active
+    Environment:
+      Variables:
+        NODE_ENV:
+          Ref: Environment
 Resources:
   DLQAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -62,11 +66,11 @@ Resources:
   ExtractMetadataFunction:
     Type: AWS::Serverless::Function
     Properties:
+      MemorySize: 128
       Handler: extract-metadata.handler
       CodeUri: ExtractMetadataFunction
-      Description: Extracts metadata from images
-      Layers:
-      - Ref: SharedLayerArn
+      Description: Makes DB queries to extract all needed metadata for the image processing
+        workflow
       Environment:
         Variables:
           PHOTOS_TABLE:
@@ -85,11 +89,10 @@ Resources:
   UpdateDatabaseStatusFunction:
     Type: AWS::Serverless::Function
     Properties:
+      MemorySize: 128
       Handler: update-metadata.handler
       CodeUri: UpdateDatabaseStatusFunction
       Description: Makes DB writings to update image processing status
-      Layers:
-      - Ref: SharedLayerArn
       Environment:
         Variables:
           PHOTOS_TABLE:
@@ -105,11 +108,11 @@ Resources:
   ApplyWatermarkFunction:
     Type: AWS::Serverless::Function
     Properties:
+      MemorySize: 512
       Handler: apply-watermark.handler
       CodeUri: ApplyWatermarkFunction
       Description: Applies watermark to images
-      Layers:
-      - Ref: SharedLayerArn
+      Timeout: 60
       Policies:
       - S3ReadPolicy:
           BucketName:
@@ -128,11 +131,10 @@ Resources:
   CleanupOriginalFunction:
     Type: AWS::Serverless::Function
     Properties:
+      MemorySize: 128
       Handler: delete-original-image.handler
       CodeUri: CleanupOriginalFunction
       Description: Deletes original image from staging bucket
-      Layers:
-      - Ref: SharedLayerArn
       Policies:
       - S3CrudPolicy:
           BucketName:
@@ -146,11 +148,10 @@ Resources:
   SendStartNotificationFunction:
     Type: AWS::Serverless::Function
     Properties:
+      MemorySize: 128
       Handler: send-start-email.handler
       CodeUri: SendStartNotificationFunction
       Description: Notify user when processing starts
-      Layers:
-      - Ref: SharedLayerArn
       Policies:
       - Version: '2012-10-17'
         Statement:
@@ -172,11 +173,10 @@ Resources:
   SendFailEmailFunction:
     Type: AWS::Serverless::Function
     Properties:
+      MemorySize: 128
       Handler: send-failed-email.handler
       CodeUri: SendFailEmailFunction
       Description: Notify user on processing failure
-      Layers:
-      - Ref: SharedLayerArn
       Policies:
       - Version: '2012-10-17'
         Statement:
@@ -198,11 +198,10 @@ Resources:
   SendFinalNotificationFunction:
     Type: AWS::Serverless::Function
     Properties:
+      MemorySize: 128
       Handler: send-success-email.handler
       CodeUri: SendFinalNotificationFunction
       Description: Notify user on processing success
-      Layers:
-      - Ref: SharedLayerArn
       Policies:
       - Version: '2012-10-17'
         Statement:
