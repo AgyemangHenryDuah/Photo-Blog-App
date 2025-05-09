@@ -40,6 +40,9 @@ Resources:
       Handler: extract-metadata.handler
       CodeUri: src/functions/
       Description: Makes DB queries to extract all needed metadata for the image processing workflow
+      Environment:
+      Variables:
+      PHOTOS_TABLE: 
   
 
   UpdateMetadataFunction:

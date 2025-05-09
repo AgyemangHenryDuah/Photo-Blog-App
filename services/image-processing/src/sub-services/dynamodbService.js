@@ -2,12 +2,12 @@ const { DynamoDBDocumentClient, PutCommand, GetCommand, UpdateCommand, DeleteCom
 const { dynamoClient } = require('../config/aws');
 
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
-const TABLE_NAME = process.env.DYNAMODB_TABLE;
+const PHOTOS_TABLE = process.env.PHOTOS_TABLE;
 
 class DynamoService {
     static async getImageMetadata(imageId) {
         const command = {
-            TableName: process.env.TABLE_NAME,
+            TableName: PHOTOS_TABLE,
             Key: { imageId: imageId },
             ProjectionExpression: "imageId, imageName, imageSize, imageType, imageUrl, createdAt"
         };
@@ -18,7 +18,7 @@ class DynamoService {
 
     static async updateImageMetadata(imageId, updateExpression, ExpressionAttributeValues) {
         const command = {
-            TableName: process.env.METADATA_TABLE,
+            TableName: PHOTOS_TABLE,
             Key: { imageId: imageId },
             UpdateExpression: `SET ${updateExpression.join(', ')}`,
             ExpressionAttributeValues: ExpressionAttributeValues,
