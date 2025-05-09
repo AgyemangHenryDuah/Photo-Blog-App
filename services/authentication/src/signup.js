@@ -1,154 +1,60 @@
-const {
-    CognitoIdentityProviderClient,
-    SignUpCommand,
-} = require('@aws-sdk/client-cognito-identity-provider');
-const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const {
-    PutCommand,
-    DynamoDBDocumentClient,
-    QueryCommand,
-} = require('@aws-sdk/lib-dynamodb');
+const { checkUserInCognito, resendConfirmationCode, createCognitoUser, createDynamoUser } = require('./helpers/signup');
 
-const cognitoClient = new CognitoIdentityProviderClient({});
-const ddbClient = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(ddbClient);
+const { checkUserInDynamoDB, createResponse } = require('./helpers/shared');
 
 exports.handler = async (event) => {
     try {
         const { firstName, lastName, email, password } = JSON.parse(event.body);
 
         if (!firstName || !lastName || !email || !password) {
-            return {
-                statusCode: 400,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    message:
-                        'Missing required fields: username, firstName, lastName, password, and email',
-                }),
-            };
+            return createResponse(400, {
+                message: 'Missing required fields: firstName, lastName, email, and password',
+            });
         }
 
-        const checkUser = await docClient.send(
-            new QueryCommand({
-                TableName: process.env.USERS_TABLE,
-                IndexName: 'EmailIndex',
-                KeyConditionExpression: '#email = :email',
-                ExpressionAttributeNames: {
-                    '#email': 'email',
-                },
-                ExpressionAttributeValues: {
-                    ':email': email,
-                },
-            }),
-        );
+        /* Check if user exists in both Cognito and DynamoDB */
+        const { userExistsInCognito, isConfirmed } = await checkUserInCognito(email);
+        const existingUser = await checkUserInDynamoDB(email);
 
-        if (checkUser.Items && checkUser.Items.length > 0) {
-            return {
-                statusCode: 400,
-                headers: getCorsHeaders(),
-                body: JSON.stringify({
-                    error: 'User with this email already exists',
-                }),
-            };
+        /* Handle existing user scenarios */
+        if (userExistsInCognito || existingUser) {
+            /* Case 1: User exists but is not confirmed - resend confirmation code */
+            if (userExistsInCognito && !isConfirmed) {
+                await resendConfirmationCode(email);
+
+                return createResponse(200, {
+                    message: 'Confirmation code resent. Please check your email.',
+                });
+            }
+
+            /* Case 2: User exists and is confirmed - return error */
+            return createResponse(400, {
+                error: 'User with this email already exists',
+            });
         }
 
-        if (!isPasswordValid(password)) {
-            return {
-                statusCode: 400,
-                headers: getCorsHeaders(),
-                body: JSON.stringify({
-                    message: 'Password does not meet complexity requirements',
-                }),
-            };
-        }
+        /* Create new user in Cognito */
+        const cognitoResponse = await createCognitoUser(email, password, firstName, lastName);
 
-        const input = {
-            ClientId: process.env.CLIENT_ID,
-            Username: email,
-            Password: password,
-            UserAttributes: [
-                { Name: 'email', Value: email },
-                { Name: 'custom:firstName', Value: firstName },
-                { Name: 'custom:lastName', Value: lastName },
-            ],
-        };
+        /* Create user in DynamoDB */
+        const userId = cognitoResponse.UserSub;
+        await createDynamoUser(userId, email, firstName, lastName);
 
-        const command = new SignUpCommand(input);
-        const response = await cognitoClient.send(command);
-
-        const userId = response.UserSub;
-
-        await docClient.send(
-            new PutCommand({
-                TableName: process.env.USERS_TABLE,
-                Item: {
-                    userId,
-                    email,
-                    firstName,
-                    lastName,
-                    createdAt: new Date().toISOString(),
-                },
-            }),
-        );
-
-        return {
-            statusCode: 201,
-            headers: { ...getCorsHeaders() },
-            body: JSON.stringify({
-                message: 'User created successfully',
-            }),
-        };
+        return createResponse(201, {
+            message: 'User created successfully. Please check your email for confirmation code.',
+        });
     } catch (error) {
-        console.error(error);
-        if (error.name === 'UsernameExistsException') {
-            return {
-                statusCode: 409,
-                headers: { ...getCorsHeaders() },
-                body: JSON.stringify({
-                    message: 'User with this email already exists',
-                }),
-            };
-        }
+        console.error('Signup error:', error);
+        let statusCode = 500;
+        let errorMessage = error.message || 'An unexpected error occurred';
+
         if (error.name === 'InvalidPasswordException') {
-            return {
-                statusCode: 400,
-                headers: { ...getCorsHeaders() },
-                body: JSON.stringify({
-                    message: 'Password does not meet requirements',
-                }),
-            };
+            statusCode = 400;
+            errorMessage = 'Password does not meet requirements';
         }
+        return createResponse(statusCode, {
+            error: errorMessage,
+            code: error.name || 'UNKNOWN_ERROR',
+        });
     }
-};
-
-function getCorsHeaders() {
-    return {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers':
-            'Content-Type,Authorization,X-Amz-Date,X-Api-Key',
-        'Access-Control-Allow-Credentials': true,
-        'Content-Type': 'application/json',
-    };
-}
-
-const isPasswordValid = (password) => {
-    // Password must be at least 8 characters long and include:
-    // - At least one uppercase letter
-    // - At least one lowercase letter
-    // - At least one number
-    // - At least one special character
-    const minLength = 8;
-    const hasUppercase = /[A-Z]/.test(password);
-    const hasLowercase = /[a-z]/.test(password);
-    const hasNumber = /[0-9]/.test(password);
-    const hasSpecialChar = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password);
-
-    return (
-        password.length >= minLength &&
-        hasUppercase &&
-        hasLowercase &&
-        hasNumber &&
-        hasSpecialChar
-    );
 };

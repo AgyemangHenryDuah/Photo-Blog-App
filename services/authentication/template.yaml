@@ -81,25 +81,6 @@ Resources:
     #   Properties:
     #     EmailIdentity: !Sub noreply@${DomainName}
 
-    # Lambda for user signup confirmation
-    # PostConfirmationFunction:
-    #   Type: AWS::Serverless::Function
-    #   Properties:
-    #     CodeUri: src/post-confirmation/
-    #     Handler: index.handler
-    #     Description: Handles post confirmation tasks for new users
-    #     Layers:
-    #       - !Ref SharedLayerArn  # Use the parameter directly
-    #     Policies:
-    #       - AmazonSESFullAccess
-    #       - AWSLambdaBasicExecutionRole
-    #       - DynamoDBCrudPolicy:
-    #           TableName: !Ref UsersTable
-    #     Environment:
-    #       Variables:
-    #         USERS_TABLE: !Ref UsersTable
-    #         FROM_EMAIL: !Sub noreply@${DomainName}
-
     # Users Database
     UsersTable:
         Type: AWS::DynamoDB::Table
@@ -225,9 +206,12 @@ Resources:
                 Variables:
                     USER_POOL_ID: !Ref UserPool
                     CLIENT_ID: !Ref UserPoolClient
+                    USERS_TABLE: !Ref UsersTable
             Policies:
                 - AmazonCognitoPowerUser
                 - AWSLambdaBasicExecutionRole
+                - DynamoDBCrudPolicy:
+                      TableName: !Ref UsersTable
             Events:
                 ApiEvent:
                     Type: Api
@@ -250,9 +234,12 @@ Resources:
                 Variables:
                     USER_POOL_ID: !Ref UserPool
                     CLIENT_ID: !Ref UserPoolClient
+                    USERS_TABLE: !Ref UsersTable
             Policies:
                 - AmazonCognitoPowerUser
                 - AWSLambdaBasicExecutionRole
+                - DynamoDBCrudPolicy:
+                      TableName: !Ref UsersTable
             Events:
                 ApiEvent:
                     Type: Api

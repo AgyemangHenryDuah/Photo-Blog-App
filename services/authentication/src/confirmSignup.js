@@ -1,7 +1,6 @@
-const {
-    CognitoIdentityProviderClient,
-    ConfirmSignUpCommand,
-} = require('@aws-sdk/client-cognito-identity-provider');
+const { CognitoIdentityProviderClient, ConfirmSignUpCommand } = require('@aws-sdk/client-cognito-identity-provider');
+const { createResponse, checkUserInDynamoDB } = require('./helpers/shared');
+const { updateUserStatus } = require('./helpers/confirmSignup');
 
 const cognitoClient = new CognitoIdentityProviderClient({});
 
@@ -10,14 +9,12 @@ exports.handler = async (event) => {
         const { email, confirmationCode } = JSON.parse(event.body);
 
         if (!email || !confirmationCode) {
-            return {
-                statusCode: 400,
-                body: JSON.stringify({
-                    message: 'Missing username or confirmation code.',
-                }),
-            };
+            return createResponse(400, {
+                message: 'Missing email or confirmation code.',
+            });
         }
 
+        /* Confirm the user in Cognito */
         const command = new ConfirmSignUpCommand({
             ClientId: process.env.CLIENT_ID,
             Username: email,
@@ -26,38 +23,49 @@ exports.handler = async (event) => {
 
         await cognitoClient.send(command);
 
-        return {
-            statusCode: 200,
-            body: JSON.stringify({
-                message: 'Account confirmed successfully!',
-            }),
-        };
+        /* Find the user in DynamoDB by email */
+        const user = await checkUserInDynamoDB(email);
+
+        if (user) {
+            /* Update the user's status to "verified" in DynamoDB */
+            await updateUserStatus(user.userId, 'verified');
+        } else {
+            return createResponse(400, {
+                error: 'User not found. Please ensure the email is correct.',
+            });
+        }
+
+        return createResponse(200, {
+            message: 'Account confirmed successfully!',
+        });
     } catch (error) {
         console.error('Error confirming sign-up:', error);
 
-        let errorMessage = 'Failed to confirm account. Please try again.';
+        let errorMessage = error.message || 'An unexpected error occurred';
         let statusCode = 500;
 
-        if (error.Code === 'CodeMismatchException') {
-            errorMessage =
-                'Invalid confirmation code. Please check and try again.';
-            statusCode = 400;
-        } else if (error.Code === 'ExpiredCodeException') {
-            errorMessage =
-                'Confirmation code has expired. Please request a new one.';
-            statusCode = 400;
-        } else if (error.Code === 'UserNotFoundException') {
-            errorMessage =
-                'User not found. Please ensure the username is correct.';
-            statusCode = 400;
-        } else if (error.Code === 'InvalidParameterException') {
-            errorMessage = 'Invalid input parameters.';
-            statusCode = 400;
+        switch (error.name) {
+            case 'CodeMismatchException':
+                errorMessage = 'Invalid confirmation code. Please check and try again.';
+                statusCode = 400;
+                break;
+            case 'ExpiredCodeException':
+                errorMessage = 'Confirmation code has expired. Please request a new one.';
+                statusCode = 400;
+                break;
+            case 'UserNotFoundException':
+                errorMessage = 'User not found. Please ensure the email is correct.';
+                statusCode = 404;
+                break;
+            case 'InvalidParameterException':
+                errorMessage = 'Invalid input parameters.';
+                statusCode = 400;
+                break;
         }
 
-        return {
-            statusCode: statusCode,
-            body: JSON.stringify({ error: errorMessage }),
-        };
+        return createResponse(statusCode, {
+            error: errorMessage,
+            code: error.name || 'UNKNOWN_ERROR',
+        });
     }
 };
