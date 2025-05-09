@@ -18,13 +18,10 @@ Parameters:
     Default: noreply@example.com
 
 Globals:
-  Function:
-    Runtime: nodejs22.x
+   Function:
     Timeout: 30
-    Tracing: Active
-    Environment:
-      Variables:
-        NODE_ENV: !Ref Environment
+    Runtime: nodejs22.x
+    MemorySize: 256
 
 Resources:
   # DLQ Alarm
@@ -66,43 +63,45 @@ Resources:
   ExtractMetadataFunction:
     Type: AWS::Serverless::Function
     Properties:
-      MemorySize: 128
       Handler: extract-metadata.handler
       CodeUri: src/functions/
-      Description: Makes DB queries to extract all needed metadata for the image processing workflow
+      Description: Extracts metadata from images
+      Layers:
+        - !Ref SharedLayerArn
       Environment:
         Variables:
-          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog/${Environment}/photos-table}}'
-          USERS_TABLE: !Sub '{{resolve:ssm:/photo-blog/${Environment}/users-table}}'
+          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/photos-table}}'
+          USERS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/users-table}}'
       Policies:
         - DynamoDBReadPolicy:
-            TableName: !Sub '{{resolve:ssm:/photo-blog/${Environment}/photos-table}}'
+            TableName: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/photos-table}}'
         - DynamoDBReadPolicy:
-            TableName: !Sub '{{resolve:ssm:/photo-blog/${Environment}/users-table}}'
+            TableName: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/users-table}}'
 
   UpdateDatabaseStatusFunction:
     Type: AWS::Serverless::Function
     Properties:
-      MemorySize: 128
       Handler: update-metadata.handler
       CodeUri: src/functions/
       Description: Makes DB writings to update image processing status
+      Layers:
+        - !Ref SharedLayerArn
       Environment:
         Variables:
-          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog/${Environment}/photos-table}}'
-          USERS_TABLE: !Sub '{{resolve:ssm:/photo-blog/${Environment}/users-table}}'
+          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/photos-table}}'
+          USERS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/users-table}}'
       Policies:
         - DynamoDBCrudPolicy:
-            TableName: !Sub '{{resolve:ssm:/photo-blog/${Environment}/photos-table}}'
+            TableName: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/photos-table}}'
 
   ApplyWatermarkFunction:
     Type: AWS::Serverless::Function
     Properties:
-      MemorySize: 512
       Handler: apply-watermark.handler
       CodeUri: src/functions/
       Description: Applies watermark to images
-      Timeout: 60
+      Layers:
+        - !Ref SharedLayerArn
       Policies:
         - S3ReadPolicy:
             BucketName: !Ref StagingBucketName
@@ -116,10 +115,11 @@ Resources:
   CleanupOriginalFunction:
     Type: AWS::Serverless::Function
     Properties:
-      MemorySize: 128
       Handler: delete-original-image.handler
       CodeUri: src/functions/
       Description: Deletes original image from staging bucket
+      Layers:
+        - !Ref SharedLayerArn
       Policies:
         - S3CrudPolicy:
             BucketName: !Ref StagingBucketName
@@ -130,10 +130,11 @@ Resources:
   SendStartNotificationFunction:
     Type: AWS::Serverless::Function
     Properties:
-      MemorySize: 128
       Handler: send-start-email.handler
       CodeUri: src/functions/
       Description: Notify user when processing starts
+      Layers:
+        - !Ref SharedLayerArn
       Policies:
         - Version: '2012-10-17'
           Statement:
@@ -152,10 +153,11 @@ Resources:
   SendFailEmailFunction:
     Type: AWS::Serverless::Function
     Properties:
-      MemorySize: 128
       Handler: send-failed-email.handler
       CodeUri: src/functions/
       Description: Notify user on processing failure
+      Layers:
+        - !Ref SharedLayerArn
       Policies:
         - Version: '2012-10-17'
           Statement:
@@ -174,10 +176,11 @@ Resources:
   SendFinalNotificationFunction:
     Type: AWS::Serverless::Function
     Properties:
-      MemorySize: 128
       Handler: send-success-email.handler
       CodeUri: src/functions/
       Description: Notify user on processing success
+      Layers:
+        - !Ref SharedLayerArn
       Policies:
         - Version: '2012-10-17'
           Statement:
