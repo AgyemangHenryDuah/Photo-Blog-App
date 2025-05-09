@@ -6,8 +6,6 @@ Parameters:
   Environment:
     Type: String
     Default: dev
-  # StagingBucketName:
-  #   Type: String
   ProcessedBucketName:
     Type: String
   SharedLayerArn:
@@ -15,7 +13,7 @@ Parameters:
 
 Globals:
   Function:
-    Runtime: nodejs22.x
+    Runtime: nodejs20.x
 
 Resources:
   # SQS Queue for image processing
@@ -35,7 +33,8 @@ Resources:
       QueueName: !Sub photo-blog-app-image-processing-dlq-${Environment}
       MessageRetentionPeriod: 1209600  # 14 days
 
-  # Lambda to process image (watermark, resize)
+  # Image Processor Function
+  # Uncomment and adjust when needed
   # ImageProcessorFunction:
   #   Type: AWS::Serverless::Function
   #   Properties:
@@ -45,7 +44,7 @@ Resources:
   #     Timeout: 180
   #     MemorySize: 1024
   #     Layers:
-  #       - !Ref SharedLayerArn
+  #       - !Ref SharedLayerArn  # Use the parameter directly
   #       - !Ref ImageProcessingLayer  # Layer for image processing libraries
   #     Environment:
   #       Variables:
@@ -70,7 +69,8 @@ Resources:
   #           Queue: !GetAtt ImageProcessingQueue.Arn
   #           BatchSize: 1
 
-  # Lambda to trigger processing upon upload to staging bucket
+  # Upload Trigger Function
+  # Uncomment and adjust when needed
   # UploadTriggerFunction:
   #   Type: AWS::Serverless::Function
   #   Properties:
@@ -78,7 +78,7 @@ Resources:
   #     Handler: index.handler
   #     Description: Triggers image processing when new image is uploaded
   #     Layers:
-  #       - !Ref SharedLayerArn
+  #       - !Ref SharedLayerArn  # Use the parameter directly
   #     Environment:
   #       Variables:
   #         PROCESSING_QUEUE: !Ref ImageProcessingQueue
@@ -92,7 +92,8 @@ Resources:
   #           Bucket: !Ref StagingBucket
   #           Events: s3:ObjectCreated:*
 
-  # Lambda to retry failed processing
+  # Processing Retry Function
+  # Uncomment and adjust when needed
   # ProcessingRetryFunction:
   #   Type: AWS::Serverless::Function
   #   Properties:
@@ -100,7 +101,7 @@ Resources:
   #     Handler: index.handler
   #     Description: Retries failed image processing tasks
   #     Layers:
-  #       - !Ref SharedLayerArn
+  #       - !Ref SharedLayerArn  # Use the parameter directly
   #     Environment:
   #       Variables:
   #         PROCESSING_QUEUE: !Ref ImageProcessingQueue
@@ -140,22 +141,7 @@ Resources:
               KeyType: HASH
           Projection:
             ProjectionType: ALL
-      # DR Replication to backup region
-      # GlobalTableConfiguration:
-      #   ReplicationGroup:
-      #     - Region: !Ref AWS::Region
-      #     - Region: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/dr-region}}'
 
-  # Layer for image processing libraries (Sharp)
-  ImageProcessingLayer:
-    Type: AWS::Serverless::LayerVersion
-    Properties:
-      LayerName: !Sub photo-blog-app-image-processing-layer-${Environment}
-      Description: Layer containing image processing libraries
-      ContentUri: ../../common/layers/image-processing/
-      CompatibleRuntimes:
-        - nodejs22.x
-      RetentionPolicy: Retain
 
   # DR Backup bucket in secondary region
   StagingBucket:
@@ -169,6 +155,7 @@ Resources:
             ExpirationInDays: 1
 
   # Set up staging bucket trigger permissions
+  # Uncomment and adjust when needed
   # StagingBucketPermission:
   #   Type: AWS::Lambda::Permission
   #   Properties:
