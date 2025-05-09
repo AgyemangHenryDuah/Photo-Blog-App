@@ -16,7 +16,7 @@ exports.handler = async (event) => {
       }
   
       // Send processing failed email
-      await emailService.sendEmail(userEmail, "processing_started", {
+      await emailService.sendEmail(userEmail, "processing_started ", {
         firstName,
         imageName,
         startTime: new Date().toISOString(),

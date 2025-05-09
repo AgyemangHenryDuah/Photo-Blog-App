@@ -45,7 +45,7 @@ class EmailService {
                     Data: this.getSubjectForTemplate(templateName)
                 }
             },
-            Source: process.env.SES_SENDER_EMAIL
+            Source: process.env.FROM_EMAIL
         };
 
         try {
