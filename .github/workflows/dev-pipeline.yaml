@@ -3,7 +3,7 @@ name: Deploy to Development
 on:
   push:
     branches:
-      - layer-fix
+      - dev
   workflow_dispatch:
     inputs:
       service:
