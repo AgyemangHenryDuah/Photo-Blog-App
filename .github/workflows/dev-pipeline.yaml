@@ -45,7 +45,6 @@ jobs:
           npm i  
           mkdir -p nodejs
           cp -r node_modules nodejs/
-          cd ../
           zip -r layer_content.zip nodejs
 
           # Publish the layer

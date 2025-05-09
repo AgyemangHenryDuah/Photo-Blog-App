@@ -10,18 +10,13 @@
     "@aws-sdk/credential-providers": "^3.504.0",
     "@aws-sdk/s3-request-presigner": "^3.504.0",
     "@aws-sdk/client-cognito-identity-provider": "^3.804.0",
-    "@aws-sdk/client-lambda": "^3.504.0",
-    "@aws-sdk/client-cloudwatch": "^3.504.0",
     "@aws-sdk/util-create-request": "^3.504.0",
     "@aws-sdk/util-dynamodb": "^3.504.0",
     "uuid": "^9.0.1",
     "human-friendly-date": "^1.0.2",
-    "aws-amplify": "^6.0.15",
     "aws-crt": "^1.21.0",
     "sharp": "^0.33.2",
-    "axios": "^1.6.5",
     "jsonwebtoken": "^9.0.2",
-    "jwks-rsa": "^3.2.0",
-    "aws-sdk": "^2.1692.0"
+    "jwks-rsa": "^3.2.0"
   }
 }
