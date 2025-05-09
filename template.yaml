@@ -79,9 +79,10 @@ Resources:
       BucketName: !Sub photo-blog-app-processed-images-${Environment}-${AWS::AccountId}
       CorsConfiguration:
         CorsRules:
-          - AllowedHeaders: ['*']
+          - AllowedHeaders: [!Sub '*']
             AllowedMethods: [GET, PUT, POST, DELETE, HEAD]
-            AllowedOrigins: [!Sub 'https://${DomainName}'] # Allowing access only from our application's domain
+            AllowedOrigins: [!Sub '*']
+            # AllowedOrigins: [!Sub 'https://${DomainName}'] # Allowing access only from our application's domain
             MaxAge: 3600
       VersioningConfiguration:
         Status: Enabled
@@ -106,6 +107,9 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonS3FullAccess
+
+  # NEVER LEAVE THIS UNCOMMENTED BEFORE DEPLOYING / PUSHING TO main or dev BRANCHES
+  # KEEP THIS COMMENTED ALWAYS
 
   # Nested stacks for each service
   # AuthServiceStack:
