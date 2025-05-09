@@ -3,7 +3,7 @@ name: Deploy to Development
 on:
   push:
     branches:
-      - layer-fix
+      - dev
   workflow_dispatch:
     inputs:
       service:
@@ -42,11 +42,10 @@ jobs:
       - name: Install shared layer dependencies
         run: |
           cd common/layers/nodejs
-          npm i  
-          mkdir -p nodejs
-          cp -r node_modules nodejs/
-          cd ../
+          npm i
+          cd ..
           zip -r layer_content.zip nodejs
+          ls
 
           # Publish the layer
           LAYER_VERSION=$(aws lambda publish-layer-version \
@@ -161,6 +160,11 @@ jobs:
             --user-pool-id ${USER_POOL_ID} \
             --query "UserPool.Arn" \
             --output text)
+
+          USERS_TABLE=$(aws cloudformation describe-stacks \
+            --stack-name photo-blog-app-auth-${ENVIRONMENT} \
+            --query "Stacks[0].Outputs[?OutputKey=='UsersTableName'].OutputValue" \
+            --output text)
             
           AUTH_API_ENDPOINT=$(aws cloudformation describe-stacks \
             --stack-name photo-blog-app-auth-${ENVIRONMENT} \
@@ -170,6 +174,7 @@ jobs:
           aws ssm put-parameter --name "/photo-blog-app/${ENVIRONMENT}/user-pool-id" --value "${USER_POOL_ID}" --type "String" --overwrite
           aws ssm put-parameter --name "/photo-blog-app/${ENVIRONMENT}/user-pool-client-id" --value "${USER_POOL_CLIENT}" --type "String" --overwrite
           aws ssm put-parameter --name "/photo-blog-app/${ENVIRONMENT}/user-pool-arn" --value "${USER_POOL_ARN}" --type "String" --overwrite
+          aws ssm put-parameter --name "/photo-blog-app/${ENVIRONMENT}/users-table" --value "${USERS_TABLE}" --type "String" --overwrite
           aws ssm put-parameter --name "/photo-blog-app/${ENVIRONMENT}/auth-api-endpoint" --value "${AUTH_API_ENDPOINT}" --type "String" --overwrite
 
 

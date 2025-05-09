@@ -71,10 +71,13 @@ Resources:
         - !Ref SharedLayerArn
       Environment:
         Variables:
+          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/photos-table}}'
           STAGING_BUCKET: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/staging-bucket}}'
       Policies:
         - S3WritePolicy:
             BucketName: '*'
+        - DynamoDBCrudPolicy:
+            TableName: '*'
       Events:
         ApiEvent:
           Type: Api
