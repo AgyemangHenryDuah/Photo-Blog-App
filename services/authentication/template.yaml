@@ -161,17 +161,17 @@ Resources:
                 MaxAge: "'600'"
 
   # DynamoDB table for Cognito backup
-  CognitoBackupTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      TableName: !Sub photo-blog-app-cognito-backup-${Environment}
-      BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-        - AttributeName: sub
-          AttributeType: S
-      KeySchema:
-        - AttributeName: sub
-          KeyType: HASH
+    CognitoBackupTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: !Sub photo-blog-app-cognito-backup-${Environment}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: sub
+            AttributeType: S
+        KeySchema:
+          - AttributeName: sub
+            KeyType: HASH
 
     # Register User Function
     RegisterUserFunction:
