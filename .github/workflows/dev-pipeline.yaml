@@ -65,6 +65,13 @@ jobs:
             --value "$LAYER_VERSION" \
             --type "String" \
             --overwrite
+
+          # Store primary region in SSM for reuse
+          aws ssm put-parameter \
+            --name "/photo-blog-app/${ENVIRONMENT}/primary-region" \
+            --value "${AWS_REGION}" \
+            --type "String" \
+            --overwrite
       
       # Store DR region in Parameter Store
       - name: Set DR Region Parameter

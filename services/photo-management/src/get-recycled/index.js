@@ -5,25 +5,25 @@ const {
   QueryCommand,
 } = require("@aws-sdk/lib-dynamodb");
 
+const { createResponse, handleError } = require('/opt/nodejs/shared-utils/eventHandler.js');
+
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
+
+const PHOTOS_TABLE = process.env.PHOTOS_TABLE;
 
 exports.handler = async (event) => {
   try {
     const userId =
       event.requestContext?.authorizer?.claims?.sub ||
-      "1324d8c2-8091-7086-a944-773d576f9eea"; // REST API
-    const tableName = process.env.PHOTOS_TABLE;
+      "1324d8c2-8091-7086-a944-773d576f9eea";
 
     if (!userId) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ message: "Missing userId in path parameters" }),
-      };
+      return createResponse(400, { message: "Missing userId in path parameters" });
     }
 
     const params = {
-      TableName: tableName,
+      TableName: PHOTOS_TABLE,
       KeyConditionExpression: "userId = :uid",
       ExpressionAttributeValues: {
         ":uid": userId,
@@ -35,15 +35,11 @@ exports.handler = async (event) => {
     const command = new QueryCommand(params);
     const data = await docClient.send(command);
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ deletedPhotos: data.Items }),
-    };
-  } catch (err) {
-    console.error("Error fetching deleted photos:", err);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ message: "Failed to retrieve deleted photos" }),
-    };
+    return createResponse(200, { deletedPhotos: data.Items })
+
+  } catch (error) {
+
+    console.error("Error fetching deleted photos:", error);
+    return handleError(error, "Failed to retrieve deleted photos" )
   }
 };

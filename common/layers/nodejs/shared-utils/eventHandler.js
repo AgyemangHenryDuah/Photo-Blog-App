@@ -16,6 +16,7 @@ const createResponse = (statusCode, body, headers = {}, isBase64Encoded = false)
     'Access-Control-Allow-Origin': '*', // Adjust for production
     'Access-Control-Allow-Credentials': true,
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
     ...headers
   };
 
@@ -57,10 +58,11 @@ const parseBody = (event) => {
    * Error handler for Lambda functions
    * 
    * @param {Error} error - Error object
+   * @param {customError} customError - Custom Error message
    * @returns {object} - API Gateway response
    */
 
-  const handleError = (error) => {
+  const handleError = (error, customError) => {
     console.error('Error:', error);
     
     // Determine status code based on error
@@ -84,9 +86,12 @@ const parseBody = (event) => {
     } else if (error.message.includes('Conflict')) {
       statusCode = 409;
       message = error.message;
+    } else {
+      statusCode = 500;
+      message = error.message;
     }
     
-    return createResponse(statusCode, { error: message });
+    return createResponse(statusCode, { error: customError || 'An error occurred!', details: message });
   };
 
   
