@@ -4,28 +4,33 @@ const {
   UpdateCommand,
 } = require("@aws-sdk/lib-dynamodb");
 
+const { createResponse, handleError } = require('/opt/nodejs/shared-utils/eventHandler.js');
+
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
 
+const PHOTOS_TABLE = process.env.PHOTOS_TABLE;
+
 exports.handler = async (event) => {
+
   try {
-    const { imageId } = JSON.parse(event.body || "{}");
-    const tableName = process.env.PHOTOS_TABLE_NAME;
+
+    console.log('Event:', JSON.stringify(event));
+
+    const { photoId } = event.pathParameters || {};
+
     const userId =
       event.requestContext?.authorizer?.claims?.sub ||
       "1324d8c2-8091-7086-a944-773d576f9eea"; // REST API
 
-    if (!imageId || !userId) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ message: "Missing imageId or userId" }),
-      };
+    if (!photoId || !userId) {
+      return createResponse(400, { message: "Missing photoId or userId" });
     }
 
     const command = new UpdateCommand({
-      TableName: tableName,
+      TableName: PHOTOS_TABLE,
       Key: {
-        imageId,
+        photoId,
         userId,
       },
       UpdateExpression: "SET isDeleted = :false REMOVE deletedAt",
@@ -33,20 +38,15 @@ exports.handler = async (event) => {
         ":false": false,
       },
       ConditionExpression:
-        "attribute_exists(imageId) AND attribute_exists(userId)",
+        "attribute_exists(photoId) AND attribute_exists(userId)",
     });
 
     await docClient.send(command);
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ message: "Photo restored successfully." }),
-    };
-  } catch (err) {
-    console.error("Error restoring photo:", err);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ message: "Failed to restore photo." }),
-    };
+    return createResponse(200, { message: "Photo restored successfully." });
+
+  } catch (error) {
+    console.error("Error restoring photo:", error);
+    return handleError(error, "Failed to restore photo.");
   }
 };

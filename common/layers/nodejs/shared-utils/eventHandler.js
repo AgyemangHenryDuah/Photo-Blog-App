@@ -86,6 +86,9 @@ const parseBody = (event) => {
     } else if (error.message.includes('Conflict')) {
       statusCode = 409;
       message = error.message;
+    } else {
+      statusCode = 500;
+      message = error.message;
     }
     
     return createResponse(statusCode, { error: customError || 'An error occurred!', details: message });

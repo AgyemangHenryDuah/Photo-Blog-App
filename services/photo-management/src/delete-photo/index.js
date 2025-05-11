@@ -4,31 +4,33 @@ const {
   UpdateCommand,
 } = require("@aws-sdk/lib-dynamodb");
 
+const { createResponse, handleError } = require('/opt/nodejs/shared-utils/eventHandler.js');
+
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
 
+const PHOTOS_TABLE = process.env.PHOTOS_TABLE;
+
 exports.handler = async (event) => {
+
   try {
-    const { imageId } = JSON.parse(event.body || "{}");
-    const tableName = process.env.PHOTOS_TABLE;
 
-    const userId =
-      event.requestContext?.authorizer?.claims?.sub ||
-      "1324d8c2-8091-7086-a944-773d576f9eea"; // REST API fallback
+    console.log('Event:', JSON.stringify(event));
 
-    if (!imageId || !userId) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ message: "Missing imageId or userId" }),
-      };
+    const { photoId } = event.pathParameters || {};
+
+    const userId = event.requestContext?.authorizer?.claims?.sub || "1324d8c2-8091-7086-a944-773d576f9eea";
+
+    if (!photoId || !userId) {
+      return createResponse(400, { message: "Missing photoId or userId" });
     }
 
     const timestamp = Date.now();
 
     const command = new UpdateCommand({
-      TableName: tableName,
+      TableName: PHOTOS_TABLE,
       Key: {
-        imageId,
+        photoId,
         userId,
       },
       UpdateExpression: "SET isDeleted = :true, deletedAt = :timestamp",
@@ -37,20 +39,15 @@ exports.handler = async (event) => {
         ":timestamp": timestamp,
       },
       ConditionExpression:
-        "attribute_exists(imageId) AND attribute_exists(userId)",
+        "attribute_exists(photoId) AND attribute_exists(userId)",
     });
 
     await docClient.send(command);
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ message: "Photo deleted (soft delete)." }),
-    };
-  } catch (err) {
-    console.error("Error deleting photo:", err);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ message: "Failed to delete photo." }),
-    };
+    return createResponse(200, { message: "Photo deleted (soft delete)." })
+
+  } catch (error) {
+    console.error("Error deleting photo:", error);
+    return handleError(error, "Failed to delete photo.")
   }
 };

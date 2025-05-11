@@ -186,6 +186,7 @@ Resources:
           PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/photos-table}}'
           PROCESSED_BUCKET: !Ref ProcessedBucketName
           SHARE_LINKS_TABLE: !Ref ShareLinksTable
+          API_BASE_URL: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/api-endpoint}}'
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref ShareLinksTable
@@ -215,12 +216,13 @@ Resources:
       Environment:
         Variables:
           PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/photos-table}}'
+          API_BASE_URL: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/api-endpoint}}'
           PROCESSED_BUCKET: !Ref ProcessedBucketName
           SHARE_LINKS_TABLE: !Ref ShareLinksTable
       Policies:
-        - DynamoDBReadPolicy:
+        - DynamoDBCrudPolicy:
             TableName: !Ref ShareLinksTable
-        - DynamoDBReadPolicy:
+        - DynamoDBCrudPolicy:
             TableName: '*'
         - S3ReadPolicy:
             BucketName: !Ref ProcessedBucketName

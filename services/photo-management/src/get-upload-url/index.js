@@ -87,7 +87,7 @@ exports.handler = async (event) => {
     console.error('Error generating pre-signed URL:', error);
     
     // Error response
-    return handleError('Error generating upload URL', error);
+    return handleError(error, 'Error generating upload URL');
 
   }
 };
