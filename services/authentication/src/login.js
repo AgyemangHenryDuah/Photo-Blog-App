@@ -1,12 +1,12 @@
 const { CognitoIdentityProviderClient, InitiateAuthCommand } = require('@aws-sdk/client-cognito-identity-provider');
 const { checkUserInDynamoDB, createResponse } = require('./helpers/shared');
+const { sendEmail } = require('./helpers/sendEmail');
 
 const cognito = new CognitoIdentityProviderClient({});
 
 exports.handler = async (event) => {
     try {
         const { email, password } = JSON.parse(event.body);
-        console.log(email, password);
 
         if (!email || !password) {
             return createResponse(400, {
@@ -24,15 +24,14 @@ exports.handler = async (event) => {
             },
         });
 
-        console.log('------------------------------------------))');
-
         const response = await cognito.send(authCommand);
-        console.log('-----------:', response);
         const idToken = response.AuthenticationResult.IdToken;
 
-        console.log('------------------------------------------))');
         /* Fetch user data from DynamoDB */
         const user = await checkUserInDynamoDB(email);
+
+        /* Send login email */
+        await sendEmail(email, user.firstName, 'login');
 
         return createResponse(
             200,
