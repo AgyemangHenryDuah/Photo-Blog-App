@@ -27,8 +27,7 @@ exports.handler = async (event) => {
     const requestBody = JSON.parse(event.body || '{}');
     const fileExtension = requestBody.fileType ? `.${requestBody.fileType.split('/')[1]}` : '.jpg';
     
-    //const userId = event.requestContext.authorizer.claims.sub;
-    const userId = '1324d8c2-8091-7086-a944-773d576f9eea';
+    const userId = event.requestContext.authorizer.claims.sub || '1324d8c2-8091-7086-a944-773d576f9eea';
 
     const photoId = uuidv4();
     

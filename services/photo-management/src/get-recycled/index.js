@@ -13,10 +13,10 @@ const docClient = DynamoDBDocumentClient.from(client);
 const PHOTOS_TABLE = process.env.PHOTOS_TABLE;
 
 exports.handler = async (event) => {
+  
   try {
-    const userId =
-      event.requestContext?.authorizer?.claims?.sub ||
-      "1324d8c2-8091-7086-a944-773d576f9eea";
+
+    const userId = event.requestContext.authorizer.claims.sub || '1324d8c2-8091-7086-a944-773d576f9eea';
 
     if (!userId) {
       return createResponse(400, { message: "Missing userId in path parameters" });
