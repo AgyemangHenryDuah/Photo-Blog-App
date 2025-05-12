@@ -1,106 +1,130 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Photo Blog - Image Processing Service
+Description: Image Processing Workflow with Step Functions and Lambda Functions
 
 Parameters:
   Environment:
     Type: String
-    Default: dev
   StagingBucketName:
     Type: String
   ProcessedBucketName:
     Type: String
   SharedLayerArn:
     Type: String
-  FromEmailAddress:
-    Type: String
-    Description: Email address to send notifications from
-    Default: noreply@example.com
 
-Globals:
-  Function:
-    Runtime: nodejs22.x
-    Timeout: 30
-    Tracing: Active
-    Environment:
-      Variables:
-        NODE_ENV: !Ref Environment
 
 Resources:
-  # DLQ Alarm
-  DLQAlarm:
-    Type: AWS::CloudWatch::Alarm
+  
+  TriggerStepFunction:
+    Type: AWS::Serverless::Function
     Properties:
-      AlarmName: !Sub PhotoBlog-${Environment}-DLQ-Messages
-      AlarmDescription: Alarm if DLQ receives any messages
-      Namespace: AWS/SQS
-      MetricName: ApproximateNumberOfMessagesVisible
-      Dimensions:
-        - Name: QueueName
-          Value: !GetAtt ImageProcessingDLQ.QueueName
-      Statistic: Sum
-      Period: 60
-      EvaluationPeriods: 1
-      Threshold: 0
-      ComparisonOperator: GreaterThanThreshold
-      TreatMissingData: notBreaching
-      # Add SNS topic action if you have one
-      # AlarmActions:
-      #   - !Ref AlertSNSTopic
-
-  ImageProcessingQueue:
-    Type: AWS::SQS::Queue
+      CodeUri: ./
+      Handler: src/functions/triggerStepFunction.handler
+      Environment:
+        Variables:
+          STATE_MACHINE_ARN: !Ref ImageProcessingStateMachine
+      Events:
+        SQSTrigger:
+          Type: S3
+          Properties:
+            Bucket: !Ref StagingBucketName
+            Events: s3:ObjectCreated:*
+  
+  ImageProcessingStateMachine:
+    Type: AWS::Serverless::StateMachine
     Properties:
-      QueueName: !Sub photo-blog-image-processing-${Environment}
-      VisibilityTimeout: 300
-      RedrivePolicy:
-        deadLetterTargetArn: !GetAtt ImageProcessingDLQ.Arn
-        maxReceiveCount: 3
-
-  ImageProcessingDLQ:
-    Type: AWS::SQS::Queue
+      RoleArn: !GetAtt StepFunctionExecutionRole.Arn
+      DefinitionUri: src/statemachine/definition.asl.json
+      DefinitionSubstitutions:
+        ExtractMetadataFunctionArn: !GetAtt ExtractMetadataFunction.Arn
+        SendStartNotificationFunctionArn: !GetAtt SendStartNotificationFunction.Arn
+        ApplyWatermarkFunctionArn: !GetAtt ApplyWatermarkFunction.Arn
+        UpdateDatabaseStatusFunctionArn: !GetAtt UpdateDatabaseStatusFunction.Arn
+        CleanupOriginalFunctionArn: !GetAtt CleanupOriginalFunction.Arn
+        SendFinalNotificationFunctionArn: !GetAtt SendFinalNotificationFunction.Arn
+        SendFailEmailFunctionArn: !GetAtt SendFailEmailFunction.Arn
+      Tracing:
+        Enabled: true
+  
+  StepFunctionExecutionRole:
+    Type: AWS::IAM::Role
     Properties:
-      QueueName: !Sub photo-blog-image-processing-dlq-${Environment}
-      MessageRetentionPeriod: 1209600  # 14 days
-
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: StepFunctionExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt ExtractMetadataFunction.Arn
+                  - !GetAtt UpdateDatabaseStatusFunction.Arn
+                  - !GetAtt ApplyWatermarkFunction.Arn
+                  - !GetAtt CleanupOriginalFunction.Arn
+                  - !GetAtt SendStartNotificationFunction.Arn
+                  - !GetAtt SendFailEmailFunction.Arn
+                  - !GetAtt SendFinalNotificationFunction.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub arn:aws:s3:::${StagingBucketName}/*
+                  - !Sub arn:aws:s3:::${ProcessedBucketName}/*
+                    
+  
   ExtractMetadataFunction:
     Type: AWS::Serverless::Function
     Properties:
-      MemorySize: 128
-      Handler: extract-metadata.handler
-      CodeUri: src/functions/
+      Handler: src/functions/extract-metadata.handler
+      CodeUri: ./
+      Layers:
+        - !Ref SharedLayerArn
       Description: Makes DB queries to extract all needed metadata for the image processing workflow
       Environment:
         Variables:
-          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog/${Environment}/photos-table}}'
-          USERS_TABLE: !Sub '{{resolve:ssm:/photo-blog/${Environment}/users-table}}'
+          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/photos-table}}'
+          USERS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/users-table}}'
       Policies:
         - DynamoDBReadPolicy:
-            TableName: !Sub '{{resolve:ssm:/photo-blog/${Environment}/photos-table}}'
+            TableName: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/photos-table}}'
         - DynamoDBReadPolicy:
-            TableName: !Sub '{{resolve:ssm:/photo-blog/${Environment}/users-table}}'
+            TableName: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/users-table}}'
 
   UpdateDatabaseStatusFunction:
     Type: AWS::Serverless::Function
     Properties:
-      MemorySize: 128
-      Handler: update-metadata.handler
-      CodeUri: src/functions/
+      Handler: src/functions/update-metadata.handler
+      CodeUri: ./
+      Layers:
+        - !Ref SharedLayerArn
       Description: Makes DB writings to update image processing status
       Environment:
         Variables:
-          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog/${Environment}/photos-table}}'
-          USERS_TABLE: !Sub '{{resolve:ssm:/photo-blog/${Environment}/users-table}}'
+          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/photos-table}}'
+          USERS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/users-table}}'
       Policies:
         - DynamoDBCrudPolicy:
-            TableName: !Sub '{{resolve:ssm:/photo-blog/${Environment}/photos-table}}'
+            TableName: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/photos-table}}'
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/users-table}}'
 
   ApplyWatermarkFunction:
     Type: AWS::Serverless::Function
     Properties:
-      MemorySize: 512
-      Handler: apply-watermark.handler
-      CodeUri: src/functions/
+      Handler: src/functions/apply-watermark.handler
+      CodeUri: ./
+      Layers:
+        - !Ref SharedLayerArn
       Description: Applies watermark to images
       Timeout: 60
       Policies:
@@ -116,9 +140,10 @@ Resources:
   CleanupOriginalFunction:
     Type: AWS::Serverless::Function
     Properties:
-      MemorySize: 128
-      Handler: delete-original-image.handler
-      CodeUri: src/functions/
+      Handler: src/functions/delete-original-image.handler
+      CodeUri: ./
+      Layers:
+        - !Ref SharedLayerArn
       Description: Deletes original image from staging bucket
       Policies:
         - S3CrudPolicy:
@@ -130,9 +155,10 @@ Resources:
   SendStartNotificationFunction:
     Type: AWS::Serverless::Function
     Properties:
-      MemorySize: 128
-      Handler: send-start-email.handler
-      CodeUri: src/functions/
+      Handler: src/functions/send-start-email.handler
+      CodeUri: ./
+      Layers:
+        - !Ref SharedLayerArn
       Description: Notify user when processing starts
       Policies:
         - Version: '2012-10-17'
@@ -142,19 +168,14 @@ Resources:
                 - ses:SendEmail
                 - ses:SendRawEmail
               Resource: "*"
-              Condition:
-                StringEquals:
-                  ses:FromAddress: !Ref FromEmailAddress
-      Environment:
-        Variables:
-          FROM_EMAIL: !Ref FromEmailAddress
-
+      
   SendFailEmailFunction:
     Type: AWS::Serverless::Function
     Properties:
-      MemorySize: 128
-      Handler: send-failed-email.handler
-      CodeUri: src/functions/
+      Handler: src/functions/send-failed-email.handler
+      CodeUri: ./
+      Layers:
+        - !Ref SharedLayerArn
       Description: Notify user on processing failure
       Policies:
         - Version: '2012-10-17'
@@ -164,19 +185,14 @@ Resources:
                 - ses:SendEmail
                 - ses:SendRawEmail
               Resource: "*"
-              Condition:
-                StringEquals:
-                  ses:FromAddress: !Ref FromEmailAddress
-      Environment:
-        Variables:
-          FROM_EMAIL: !Ref FromEmailAddress
-
+      
   SendFinalNotificationFunction:
     Type: AWS::Serverless::Function
     Properties:
-      MemorySize: 128
-      Handler: send-success-email.handler
-      CodeUri: src/functions/
+      Handler: src/functions/send-success-email.handler
+      CodeUri: ./
+      Layers:
+        - !Ref SharedLayerArn
       Description: Notify user on processing success
       Policies:
         - Version: '2012-10-17'
@@ -185,96 +201,4 @@ Resources:
               Action:
                 - ses:SendEmail
                 - ses:SendRawEmail
-              Resource: "*"
-              Condition:
-                StringEquals:
-                  ses:FromAddress: !Ref FromEmailAddress
-      Environment:
-        Variables:
-          FROM_EMAIL: !Ref FromEmailAddress
-
-  ImageProcessingStateMachine:
-    Type: AWS::Serverless::StateMachine
-    Properties:
-      DefinitionUri: src/statemachine/definition.asl.json
-      DefinitionSubstitutions:
-        ExtractMetadataFunctionArn: !GetAtt ExtractMetadataFunction.Arn
-        SendStartNotificationFunctionArn: !GetAtt SendStartNotificationFunction.Arn
-        ApplyWatermarkFunctionArn: !GetAtt ApplyWatermarkFunction.Arn
-        UpdateDatabaseStatusFunctionArn: !GetAtt UpdateDatabaseStatusFunction.Arn
-        CleanupOriginalFunctionArn: !GetAtt CleanupOriginalFunction.Arn
-        SendFinalNotificationFunctionArn: !GetAtt SendFinalNotificationFunction.Arn
-        SendFailEmailFunctionArn: !GetAtt SendFailEmailFunction.Arn
-      Policies:
-        - LambdaInvokePolicy:
-            FunctionName: !Ref ExtractMetadataFunction
-        - LambdaInvokePolicy:
-            FunctionName: !Ref UpdateDatabaseStatusFunction
-        - LambdaInvokePolicy:
-            FunctionName: !Ref ApplyWatermarkFunction
-        - LambdaInvokePolicy:
-            FunctionName: !Ref CleanupOriginalFunction
-        - LambdaInvokePolicy:
-            FunctionName: !Ref SendStartNotificationFunction
-        - LambdaInvokePolicy:
-            FunctionName: !Ref SendFailEmailFunction
-        - LambdaInvokePolicy:
-            FunctionName: !Ref SendFinalNotificationFunction
-        - SQSPollerPolicy:
-            QueueName: !Ref ImageProcessingQueue
-      Tracing:
-        Enabled: true
-
-  ProcessImageRule:
-    Type: AWS::Events::Rule
-    Properties:
-      EventPattern:
-        source:
-          - aws.sqs
-        detail-type:
-          - AWS API Call Via CloudTrail
-        detail:
-          eventSource:
-            - sqs.amazonaws.com
-          eventName:
-            - ReceiveMessage
-          resources:
-            - !GetAtt ImageProcessingQueue.Arn
-      Targets:
-        - Arn: !Ref ImageProcessingStateMachine
-          Id: "TriggerImageProcessing"
-          RoleArn: !GetAtt EventBridgeRole.Arn
-
-  EventBridgeRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - events.amazonaws.com
-            Action:
-              - sts:AssumeRole
-      Policies:
-        - PolicyName: InvokeStepFunctionPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - states:StartExecution
-                Resource:
-                  - !Ref ImageProcessingStateMachine
-
-Outputs:
-  ImageProcessingStateMachineArn:
-    Description: ARN of the Image Processing State Machine
-    Value: !Ref ImageProcessingStateMachine
-  ImageProcessingQueueUrl:
-    Description: URL of the Image Processing Queue
-    Value: !Ref ImageProcessingQueue
-  ImageProcessingDLQUrl:
-    Description: URL of the Image Processing Dead Letter Queue
-    Value: !Ref ImageProcessingDLQ
+              Resource: "*"  
