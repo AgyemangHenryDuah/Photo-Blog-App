@@ -1,22 +1,22 @@
 const { createResponse, checkUserInDynamoDB } = require('./helpers/shared');
-const { getKey, extractTokenFromCookies } = require('./helpers/getUser');
+// const { getKey, extractTokenFromCookies } = require('./helpers/getUser');
 
-const jwt = require('jsonwebtoken');
+// const jwt = require('jsonwebtoken');
 
 exports.handler = async (event) => {
     try {
-        const token = extractTokenFromCookies(event.headers?.Cookie);
+        // const token = extractTokenFromCookies(event.headers?.Cookie);
 
-        if (!token) return createResponse(401, { error: 'Uauthorized' });
+        // if (!token) return createResponse(401, { error: 'Unauthorized' });
 
-        const decoded = await new Promise((resolve, reject) => {
-            jwt.verify(token, getKey, {}, (err, decoded) => {
-                if (err) reject(err);
-                else resolve(decoded);
-            });
-        });
+        // const decoded = await new Promise((resolve, reject) => {
+        //     jwt.verify(token, getKey, {}, (err, decoded) => {
+        //         if (err) reject(err);
+        //         else resolve(decoded);
+        //     });
+        // });
 
-        const email = decoded.email;
+        const email = event.requestContext?.authorizer?.claims?.email;
 
         // Query DynamoDB using email
         const user = await checkUserInDynamoDB(email);

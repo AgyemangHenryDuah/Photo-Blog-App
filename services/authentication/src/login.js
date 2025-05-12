@@ -6,6 +6,7 @@ const cognito = new CognitoIdentityProviderClient({});
 exports.handler = async (event) => {
     try {
         const { email, password } = JSON.parse(event.body);
+        console.log(email, password);
 
         if (!email || !password) {
             return createResponse(400, {
@@ -23,10 +24,13 @@ exports.handler = async (event) => {
             },
         });
 
-        const response = await cognito.send(authCommand);
+        console.log('------------------------------------------))');
 
+        const response = await cognito.send(authCommand);
+        console.log('-----------:', response);
         const idToken = response.AuthenticationResult.IdToken;
 
+        console.log('------------------------------------------))');
         /* Fetch user data from DynamoDB */
         const user = await checkUserInDynamoDB(email);
 
