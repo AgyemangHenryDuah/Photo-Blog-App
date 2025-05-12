@@ -19,7 +19,7 @@ const getTextBuffer = async (text) => {
   );
 };
 
-const streamToBuffer = async (stream) => {
+const streamToBuffer = async (streamOrBuffer) => {
   // If it's already a buffer, return it directly
   if (Buffer.isBuffer(streamOrBuffer)) {
     return streamOrBuffer;
