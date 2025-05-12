@@ -11,7 +11,7 @@ exports.handler = async (event) => {
         const { email, confirmationCode, newPassword } = JSON.parse(event.body);
 
         if (!email || !confirmationCode || !newPassword) {
-            return createResponse(400, { message: 'Email, confirmation code, and new password are required' });
+            return createResponse(400, { message: 'email, confirmationCode, and newPassword are required' });
         }
 
         const confirmForgotPasswordParams = {

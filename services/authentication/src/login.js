@@ -34,11 +34,7 @@ exports.handler = async (event) => {
         /* Fetch user data from DynamoDB */
         const user = await checkUserInDynamoDB(email);
 
-        return createResponse(
-            200,
-            { success: true, user, token: idToken },
-            { 'Set-Cookie': `token=${idToken}; Path=/; HttpOnly` },
-        );
+        return createResponse(200, { success: true, user }, { 'Set-Cookie': `token=${idToken}; Path=/` });
     } catch (error) {
         console.error('Login error:', error);
 
