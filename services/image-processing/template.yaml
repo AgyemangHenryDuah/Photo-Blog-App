@@ -30,47 +30,28 @@ Resources:
             Status: Enabled
             ExpirationInDays: 1
   
-  # Lambda function to trigger the Step Function on S3 uploads
-  UploadTriggerStepFunction:
-    Type: AWS::Serverless::Function
+  # IAM Roles first to avoid circular dependencies
+  UploadTriggerFunctionRole:
+    Type: AWS::IAM::Role
     Properties:
-      CodeUri: ./
-      Handler: src/functions/triggerStepFunction.handler
-      Environment:
-        Variables:
-          STATE_MACHINE_ARN: !GetAtt ImageProcessingStateMachine.Arn
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action: states:StartExecution
-              Resource: !GetAtt ImageProcessingStateMachine.Arn
-      Events:
-        S3Event:
-          Type: S3
-          Properties:
-            Bucket: !Ref StagingBucket
-            Events: s3:ObjectCreated:*
-  
-  # State Machine for image processing workflow
-  ImageProcessingStateMachine:
-    Type: AWS::Serverless::StateMachine
-    Properties:
-      Type: STANDARD
-      DefinitionUri: src/statemachine/definition.asl.json
-      DefinitionSubstitutions:
-        ExtractMetadataFunctionArn: !GetAtt ExtractMetadataFunction.Arn
-        SendStartNotificationFunctionArn: !GetAtt SendStartNotificationFunction.Arn
-        ApplyWatermarkFunctionArn: !GetAtt ApplyWatermarkFunction.Arn
-        UpdateDatabaseStatusFunctionArn: !GetAtt UpdateDatabaseStatusFunction.Arn
-        CleanupOriginalFunctionArn: !GetAtt CleanupOriginalFunction.Arn
-        SendFinalNotificationFunctionArn: !GetAtt SendFinalNotificationFunction.Arn
-        SendFailEmailFunctionArn: !GetAtt SendFailEmailFunction.Arn
-      Role: !GetAtt StepFunctionExecutionRole.Arn
-      Tracing:
-        Enabled: true
-  
-  # IAM Role for Step Function execution
+        - PolicyName: StartStepFunctionExecution
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: states:StartExecution
+                Resource: '*'  # Will be refined after creation
+
   StepFunctionExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -94,10 +75,14 @@ Resources:
                   - s3:PutObject
                   - s3:DeleteObject
                 Resource:
-                  - !Sub arn:aws:s3:::photo-blog-staging-${AWS::StackName}-${AWS::Region}/*
+                  - !Sub arn:aws:s3:::${StagingBucket}/*
                   - !Sub arn:aws:s3:::${ProcessedBucketName}/*
-  
-  # Lambda function to extract metadata
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: '*'  # Will allow invoking all Lambda functions
+
+  # Lambda Functions
   ExtractMetadataFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -116,7 +101,6 @@ Resources:
         - DynamoDBReadPolicy:
             TableName: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/users-table}}'
 
-  # Lambda function to update database status
   UpdateDatabaseStatusFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -135,7 +119,6 @@ Resources:
         - DynamoDBCrudPolicy:
             TableName: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/users-table}}'
 
-  # Lambda function to apply watermark to images
   ApplyWatermarkFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -156,7 +139,6 @@ Resources:
         - S3WritePolicy:
             BucketName: !Ref ProcessedBucketName
 
-  # Lambda function to clean up original images
   CleanupOriginalFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -172,7 +154,6 @@ Resources:
         - S3CrudPolicy:
             BucketName: !Ref StagingBucket
 
-  # Lambda function to send start notification
   SendStartNotificationFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -190,7 +171,6 @@ Resources:
                 - ses:SendRawEmail
               Resource: "*"
       
-  # Lambda function to send failure notification
   SendFailEmailFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -208,7 +188,6 @@ Resources:
                 - ses:SendRawEmail
               Resource: "*"
       
-  # Lambda function to send success notification
   SendFinalNotificationFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -224,7 +203,56 @@ Resources:
               Action:
                 - ses:SendEmail
                 - ses:SendRawEmail
-              Resource: "*"  
+              Resource: "*"
+
+  # State Machine for image processing workflow
+  ImageProcessingStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Type: STANDARD
+      DefinitionUri: src/statemachine/definition.asl.json
+      DefinitionSubstitutions:
+        ExtractMetadataFunctionArn: !GetAtt ExtractMetadataFunction.Arn
+        SendStartNotificationFunctionArn: !GetAtt SendStartNotificationFunction.Arn
+        ApplyWatermarkFunctionArn: !GetAtt ApplyWatermarkFunction.Arn
+        UpdateDatabaseStatusFunctionArn: !GetAtt UpdateDatabaseStatusFunction.Arn
+        CleanupOriginalFunctionArn: !GetAtt CleanupOriginalFunction.Arn
+        SendFinalNotificationFunctionArn: !GetAtt SendFinalNotificationFunction.Arn
+        SendFailEmailFunctionArn: !GetAtt SendFailEmailFunction.Arn
+      Role: !GetAtt StepFunctionExecutionRole.Arn
+      Tracing:
+        Enabled: true
+
+  # Lambda function to trigger the Step Function on S3 uploads - Added last to resolve circular dependency
+  UploadTriggerStepFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: src/functions/triggerStepFunction.handler
+      Role: !GetAtt UploadTriggerFunctionRole.Arn
+      Environment:
+        Variables:
+          STATE_MACHINE_ARN: !GetAtt ImageProcessingStateMachine.Arn
+      Events:
+        S3Event:
+          Type: S3
+          Properties:
+            Bucket: !Ref StagingBucket
+            Events: s3:ObjectCreated:*
+
+  # Update UploadTriggerFunctionRole policy with precise StateMachine ARN
+  UploadTriggerFunctionRolePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: StateMachineStartExecutionPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: states:StartExecution
+            Resource: !GetAtt ImageProcessingStateMachine.Arn
+      Roles:
+        - !Ref UploadTriggerFunctionRole
               
   # DynamoDB table for photos metadata
   PhotosTable:
