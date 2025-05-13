@@ -31,7 +31,7 @@ exports.handler = async (event) => {
         const user = await checkUserInDynamoDB(email);
         await sendEmail(email, user.firstName, 'login');
 
-        return createResponse(200, { success: true, user });
+        return createResponse(200, { success: true, user, idToken });
     } catch (error) {
         console.error('Login error:', error);
 
