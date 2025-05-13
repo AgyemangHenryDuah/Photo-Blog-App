@@ -139,7 +139,7 @@ Resources:
             ProjectionType: ALL
 
 
-  # DR Backup bucket in secondary region
+  # Staging bucket
   StagingBucket:
     Type: AWS::S3::Bucket
     Properties:
