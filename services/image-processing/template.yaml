@@ -25,6 +25,7 @@ Globals:
     Environment:
       Variables:
         NODE_ENV: !Ref Environment
+        REGION: !Ref AWS::Region
 
 Resources:
   # DLQ Alarm
