@@ -1,124 +1,232 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Photo Blog - Image Processing Service
+Description: Image Processing Workflow with Step Functions and Lambda Functions
 
 Parameters:
   Environment:
     Type: String
     Default: dev
+    Description: Deployment environment (dev, prod)
   ProcessedBucketName:
     Type: String
+    Description: Name of the S3 bucket for processed images
   SharedLayerArn:
     Type: String
+    Description: ARN of the shared Lambda layer
 
 Globals:
   Function:
     Runtime: nodejs20.x
 
 Resources:
-  # SQS Queue for image processing
-  ImageProcessingQueue:
-    Type: AWS::SQS::Queue
+  # S3 Bucket for staging image uploads
+  StagingBucket:
+    Type: AWS::S3::Bucket
     Properties:
-      QueueName: !Sub photo-blog-app-image-processing-${Environment}
-      VisibilityTimeout: 300  # 5 minutes
-      RedrivePolicy:
-        deadLetterTargetArn: !GetAtt ImageProcessingDLQ.Arn
-        maxReceiveCount: 3
-
-  # Dead Letter Queue for failed processing
-  ImageProcessingDLQ:
-    Type: AWS::SQS::Queue
+      BucketName: !Sub photo-blog-staging-${AWS::StackName}-${AWS::Region}
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldFiles
+            Status: Enabled
+            ExpirationInDays: 1
+  
+  # Lambda function to trigger the Step Function on S3 uploads
+  UploadTriggerStepFunction:
+    Type: AWS::Serverless::Function
     Properties:
-      QueueName: !Sub photo-blog-app-image-processing-dlq-${Environment}
-      MessageRetentionPeriod: 1209600  # 14 days
+      CodeUri: ./
+      Handler: src/functions/triggerStepFunction.handler
+      Environment:
+        Variables:
+          STATE_MACHINE_ARN: !GetAtt ImageProcessingStateMachine.Arn
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: states:StartExecution
+              Resource: !GetAtt ImageProcessingStateMachine.Arn
+      Events:
+        S3Event:
+          Type: S3
+          Properties:
+            Bucket: !Ref StagingBucket
+            Events: s3:ObjectCreated:*
+  
+  # State Machine for image processing workflow
+  ImageProcessingStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Type: STANDARD
+      DefinitionUri: src/statemachine/definition.asl.json
+      DefinitionSubstitutions:
+        ExtractMetadataFunctionArn: !GetAtt ExtractMetadataFunction.Arn
+        SendStartNotificationFunctionArn: !GetAtt SendStartNotificationFunction.Arn
+        ApplyWatermarkFunctionArn: !GetAtt ApplyWatermarkFunction.Arn
+        UpdateDatabaseStatusFunctionArn: !GetAtt UpdateDatabaseStatusFunction.Arn
+        CleanupOriginalFunctionArn: !GetAtt CleanupOriginalFunction.Arn
+        SendFinalNotificationFunctionArn: !GetAtt SendFinalNotificationFunction.Arn
+        SendFailEmailFunctionArn: !GetAtt SendFailEmailFunction.Arn
+      Role: !GetAtt StepFunctionExecutionRole.Arn
+      Tracing:
+        Enabled: true
+  
+  # IAM Role for Step Function execution
+  StepFunctionExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaRole
+      Policies:
+        - PolicyName: StepFunctionS3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub arn:aws:s3:::photo-blog-staging-${AWS::StackName}-${AWS::Region}/*
+                  - !Sub arn:aws:s3:::${ProcessedBucketName}/*
+  
+  # Lambda function to extract metadata
+  ExtractMetadataFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/functions/extract-metadata.handler
+      CodeUri: ./
+      Layers:
+        - !Ref SharedLayerArn
+      Description: Makes DB queries to extract all needed metadata for the image processing workflow
+      Environment:
+        Variables:
+          PHOTOS_TABLE: !Ref PhotosTable
+          USERS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/users-table}}'
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref PhotosTable
+        - DynamoDBReadPolicy:
+            TableName: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/users-table}}'
 
-  # Image Processor Function
-  # Uncomment and adjust when needed
-  # ImageProcessorFunction:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     CodeUri: src/image-processor/
-  #     Handler: index.handler
-  #     Description: Processes uploaded images
-  #     Timeout: 180
-  #     MemorySize: 1024
-  #     Layers:
-  #       - !Ref SharedLayerArn  # Use the parameter directly
-  #       - !Ref ImageProcessingLayer  # Layer for image processing libraries
-  #     Environment:
-  #       Variables:
-  #         STAGING_BUCKET: !Ref StagingBucket
-  #         PROCESSED_BUCKET: !Ref ProcessedBucketName
-  #         PHOTOS_TABLE: !Ref PhotosTable
-  #         PROCESSING_QUEUE: !Ref ImageProcessingQueue
-  #     Policies:
-  #       - S3CrudPolicy:
-  #           BucketName: !Ref StagingBucket
-  #       - S3CrudPolicy:
-  #           BucketName: !Ref ProcessedBucketName
-  #       - DynamoDBCrudPolicy:
-  #           TableName: !Ref PhotosTable
-  #       - SQSPollerPolicy:
-  #           QueueName: !GetAtt ImageProcessingQueue.QueueName
-  #       - arn:aws:iam::aws:policy/AmazonSESFullAccess
-  #     Events:
-  #       SQSEvent:
-  #         Type: SQS
-  #         Properties:
-  #           Queue: !GetAtt ImageProcessingQueue.Arn
-  #           BatchSize: 1
+  # Lambda function to update database status
+  UpdateDatabaseStatusFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/functions/update-metadata.handler
+      CodeUri: ./
+      Layers:
+        - !Ref SharedLayerArn
+      Description: Makes DB writings to update image processing status
+      Environment:
+        Variables:
+          PHOTOS_TABLE: !Ref PhotosTable
+          USERS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/users-table}}'
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PhotosTable
+        - DynamoDBCrudPolicy:
+            TableName: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/users-table}}'
 
-  # Upload Trigger Function
-  # Uncomment and adjust when needed
-  # UploadTriggerFunction:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     CodeUri: src/upload-trigger/
-  #     Handler: index.handler
-  #     Description: Triggers image processing when new image is uploaded
-  #     Layers:
-  #       - !Ref SharedLayerArn  # Use the parameter directly
-  #     Environment:
-  #       Variables:
-  #         PROCESSING_QUEUE: !Ref ImageProcessingQueue
-  #     Policies:
-  #       - SQSSendMessagePolicy:
-  #           QueueName: !GetAtt ImageProcessingQueue.QueueName
-  #     Events:
-  #       S3Event:
-  #         Type: S3
-  #         Properties:
-  #           Bucket: !Ref StagingBucket
-  #           Events: s3:ObjectCreated:*
+  # Lambda function to apply watermark to images
+  ApplyWatermarkFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/functions/apply-watermark.handler
+      CodeUri: ./
+      Layers:
+        - !Ref SharedLayerArn
+      Description: Applies watermark to images
+      Timeout: 60
+      MemorySize: 512
+      Environment:
+        Variables:
+          STAGING_BUCKET: !Sub photo-blog-staging-${AWS::StackName}-${AWS::Region}
+          PROCESSED_BUCKET: !Ref ProcessedBucketName
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Sub photo-blog-staging-${AWS::StackName}-${AWS::Region}
+        - S3WritePolicy:
+            BucketName: !Ref ProcessedBucketName
 
-  # Processing Retry Function
-  # Uncomment and adjust when needed
-  # ProcessingRetryFunction:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     CodeUri: src/retry-processor/
-  #     Handler: index.handler
-  #     Description: Retries failed image processing tasks
-  #     Layers:
-  #       - !Ref SharedLayerArn  # Use the parameter directly
-  #     Environment:
-  #       Variables:
-  #         PROCESSING_QUEUE: !Ref ImageProcessingQueue
-  #         DLQ_URL: !Ref ImageProcessingDLQ
-  #     Policies:
-  #       - SQSSendMessagePolicy:
-  #           QueueName: !GetAtt ImageProcessingQueue.QueueName
-  #       - SQSPollerPolicy:
-  #           QueueName: !GetAtt ImageProcessingDLQ.QueueName
-  #     Events:
-  #       ScheduledRetry:
-  #         Type: Schedule
-  #         Properties:
-  #           Schedule: rate(5 minutes)
-  #           Description: Retry failed image processing tasks
+  # Lambda function to clean up original images
+  CleanupOriginalFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/functions/delete-original-image.handler
+      CodeUri: ./
+      Layers:
+        - !Ref SharedLayerArn
+      Description: Deletes original image from staging bucket
+      Environment:
+        Variables:
+          STAGING_BUCKET: !Sub photo-blog-staging-${AWS::StackName}-${AWS::Region}
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Sub photo-blog-staging-${AWS::StackName}-${AWS::Region}
 
-  # Photos metadata table
+  # Lambda function to send start notification
+  SendStartNotificationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/functions/send-start-email.handler
+      CodeUri: ./
+      Layers:
+        - !Ref SharedLayerArn
+      Description: Notify user when processing starts
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendRawEmail
+              Resource: "*"
+      
+  # Lambda function to send failure notification
+  SendFailEmailFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/functions/send-failed-email.handler
+      CodeUri: ./
+      Layers:
+        - !Ref SharedLayerArn
+      Description: Notify user on processing failure
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendRawEmail
+              Resource: "*"
+      
+  # Lambda function to send success notification
+  SendFinalNotificationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/functions/send-success-email.handler
+      CodeUri: ./
+      Layers:
+        - !Ref SharedLayerArn
+      Description: Notify user on processing success
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendRawEmail
+              Resource: "*"  
+              
+  # DynamoDB table for photos metadata
   PhotosTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -142,41 +250,18 @@ Resources:
           Projection:
             ProjectionType: ALL
 
-
-  # DR Backup bucket in secondary region
-  StagingBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub photo-blog-app-staging-${Environment}-${AWS::AccountId}
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldFiles
-            Status: Enabled
-            ExpirationInDays: 1
-
-  # Set up staging bucket trigger permissions
-  # Uncomment and adjust when needed
-  # StagingBucketPermission:
-  #   Type: AWS::Lambda::Permission
-  #   Properties:
-  #     Action: lambda:InvokeFunction
-  #     FunctionName: !Ref UploadTriggerFunction
-  #     Principal: s3.amazonaws.com
-  #     SourceAccount: !Ref AWS::AccountId
-  #     SourceArn: !Sub 'arn:aws:s3:::${StagingBucket}'
-
 Outputs:
+  ImageProcessingStateMachineArn:
+    Description: ARN of the image processing state machine
+    Value: !GetAtt ImageProcessingStateMachine.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-StateMachineArn
+
   PhotosTableName:
     Description: DynamoDB table for photo metadata
     Value: !Ref PhotosTable
     Export:
       Name: !Sub ${AWS::StackName}-PhotosTable
-      
-  ImageProcessingQueueUrl:
-    Description: SQS queue for image processing
-    Value: !Ref ImageProcessingQueue
-    Export:
-      Name: !Sub ${AWS::StackName}-ProcessingQueue
 
   StagingBucketName:
     Description: S3 bucket for image staging

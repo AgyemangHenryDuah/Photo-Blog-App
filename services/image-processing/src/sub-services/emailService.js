@@ -4,7 +4,7 @@ const path = require('path');
 
 class EmailService {
     constructor() {
-        this.sesClient = new SESClient({ region: process.env.AWS_REGION });
+        this.sesClient = new SESClient({ region: process.env.PRIMARY_REGION });
         this.templates = {
             processing_started: this.loadTemplate('started.html'),
             processing_success: this.loadTemplate('success.html'),
@@ -45,7 +45,7 @@ class EmailService {
                     Data: this.getSubjectForTemplate(templateName)
                 }
             },
-            Source: process.env.SES_SENDER_EMAIL
+            Source: process.env.FROM_EMAIL
         };
 
         try {
