@@ -26,9 +26,7 @@ Resources:
                 - email
             UsernameAttributes:
                 - email
-            # EmailConfiguration:
-            #   EmailSendingAccount: DEVELOPER
-            #   SourceArn: !Sub arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/noreply@${DomainName}
+
             Schema:
                 - Name: email
                   AttributeDataType: String
@@ -42,9 +40,7 @@ Resources:
                   AttributeDataType: String
                   Mutable: true
                   Required: false
-            # LambdaConfig:
-            #   PostConfirmation: !GetAtt PostConfirmationFunction.Arn
-            # Enable password recovery and MFA for security
+
             AdminCreateUserConfig:
                 AllowAdminCreateUserOnly: false
             # AccountRecoverySetting:
@@ -74,12 +70,6 @@ Resources:
                 - custom:firstName
                 - custom:lastName
             PreventUserExistenceErrors: ENABLED
-
-    # SES Email Identity
-    # EmailIdentity:
-    #   Type: AWS::SES::EmailIdentity
-    #   Properties:
-    #     EmailIdentity: !Sub noreply@${DomainName}
 
     # Users Database
     UsersTable:
@@ -205,11 +195,18 @@ Resources:
                     USER_POOL_ID: !Ref UserPool
                     CLIENT_ID: !Ref UserPoolClient
                     USERS_TABLE: !Ref UsersTable
+                    APP_DOMAIN: !Ref DomainName
             Policies:
                 - AmazonCognitoPowerUser
                 - AWSLambdaBasicExecutionRole
                 - DynamoDBCrudPolicy:
                       TableName: !Ref UsersTable
+                - Statement:
+                      - Effect: Allow
+                        Action:
+                            - ses:SendEmail
+                            - ses:SendRawEmail
+                        Resource: !Sub arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*
             Events:
                 ApiEvent:
                     Type: Api
@@ -234,11 +231,19 @@ Resources:
                     USER_POOL_ID: !Ref UserPool
                     CLIENT_ID: !Ref UserPoolClient
                     USERS_TABLE: !Ref UsersTable
+                    APP_DOMAIN: !Ref DomainName
+
             Policies:
                 - AmazonCognitoPowerUser
                 - AWSLambdaBasicExecutionRole
                 - DynamoDBCrudPolicy:
                       TableName: !Ref UsersTable
+                - Statement:
+                      - Effect: Allow
+                        Action:
+                            - ses:SendEmail
+                            - ses:SendRawEmail
+                        Resource: !Sub arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*
             Events:
                 ApiEvent:
                     Type: Api
