@@ -23,7 +23,7 @@ Resources:
   StagingBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub photo-blog-staging-${AWS::StackName}-${AWS::Region}
+      BucketName: !Sub photo-blog-app-staging-${Environment}-${AWS::AccountId}
       LifecycleConfiguration:
         Rules:
           - Id: DeleteOldFiles
@@ -148,11 +148,11 @@ Resources:
       MemorySize: 512
       Environment:
         Variables:
-          STAGING_BUCKET: !Sub photo-blog-staging-${AWS::StackName}-${AWS::Region}
+          STAGING_BUCKET: !Ref StagingBucket
           PROCESSED_BUCKET: !Ref ProcessedBucketName
       Policies:
         - S3ReadPolicy:
-            BucketName: !Sub photo-blog-staging-${AWS::StackName}-${AWS::Region}
+            BucketName: !Ref StagingBucket
         - S3WritePolicy:
             BucketName: !Ref ProcessedBucketName
 
@@ -167,10 +167,10 @@ Resources:
       Description: Deletes original image from staging bucket
       Environment:
         Variables:
-          STAGING_BUCKET: !Sub photo-blog-staging-${AWS::StackName}-${AWS::Region}
+          STAGING_BUCKET: !Ref StagingBucket
       Policies:
         - S3CrudPolicy:
-            BucketName: !Sub photo-blog-staging-${AWS::StackName}-${AWS::Region}
+            BucketName: !Ref StagingBucket
 
   # Lambda function to send start notification
   SendStartNotificationFunction:
