@@ -33,8 +33,7 @@ exports.handler = async (event) => {
       return createResponse(400, { message: 'Photo ID is required' });
     }
 
-    // const userId = event.requestContext.authorizer.claims.sub;
-    const userId = '1324d8c2-8091-7086-a944-773d576f9eea';
+    const userId = event.requestContext.authorizer.claims.sub || '1324d8c2-8091-7086-a944-773d576f9eea';
 
     // Checking if the photo exists and belongs to the user
     const photoResponse = await ddbDocClient.send(

@@ -12,6 +12,7 @@ const ddbDocClient = DynamoDBDocumentClient.from(ddbClient, {
     removeUndefinedValues: true
   }
 });
+
 const s3Client = new S3Client({ region: process.env.PRIMARY_REGION || 'eu-central-1' });
 
 // Environment variables

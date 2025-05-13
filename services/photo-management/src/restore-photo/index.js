@@ -19,9 +19,7 @@ exports.handler = async (event) => {
 
     const { photoId } = event.pathParameters || {};
 
-    const userId =
-      event.requestContext?.authorizer?.claims?.sub ||
-      "1324d8c2-8091-7086-a944-773d576f9eea"; // REST API
+    const userId = event.requestContext.authorizer.claims.sub || '1324d8c2-8091-7086-a944-773d576f9eea';
 
     if (!photoId || !userId) {
       return createResponse(400, { message: "Missing photoId or userId" });
