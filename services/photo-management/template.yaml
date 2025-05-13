@@ -11,6 +11,10 @@ Parameters:
   SharedLayerArn:
     Type: String
 
+Globals:
+  Function:
+    Runtime: nodejs20.x
+
 Resources:
   # API Gateway
   PhotosApi:
@@ -25,8 +29,8 @@ Resources:
         DefaultAuthorizer: CognitoAuthorizer
         Authorizers:
           CognitoAuthorizer:
-            UserPoolArn: !Sub '{{resolve:ssm:/photo-blog/${Environment}/user-pool-arn}}'
-        AddDefaultAuthorizerToCorsPreflight: false # To hopefully mitigate our previously encountered cors issues :)
+            UserPoolArn: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/user-pool-arn}}'
+        AddDefaultAuthorizerToCorsPreflight: false
 
   # Get user photos function
   GetPhotosFunction:
@@ -39,7 +43,7 @@ Resources:
         - !Ref SharedLayerArn
       Environment:
         Variables:
-          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog/${Environment}/photos-table}}'
+          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/photos-table}}'
           PROCESSED_BUCKET: !Ref ProcessedBucketName
       Policies:
         - DynamoDBReadPolicy:
@@ -53,6 +57,8 @@ Resources:
             RestApiId: !Ref PhotosApi
             Path: /photos
             Method: get
+            Auth:
+              Authorizer: CognitoAuthorizer
 
   # Upload photo function (generates presigned URL)
   GetUploadUrlFunction:
@@ -65,10 +71,13 @@ Resources:
         - !Ref SharedLayerArn
       Environment:
         Variables:
-          STAGING_BUCKET: !Sub '{{resolve:ssm:/photo-blog/${Environment}/staging-bucket}}'
+          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/photos-table}}'
+          STAGING_BUCKET: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/staging-bucket}}'
       Policies:
         - S3WritePolicy:
             BucketName: '*'
+        - DynamoDBCrudPolicy:
+            TableName: '*'
       Events:
         ApiEvent:
           Type: Api
@@ -76,6 +85,8 @@ Resources:
             RestApiId: !Ref PhotosApi
             Path: /photos/upload-url
             Method: post
+            Auth:
+              Authorizer: CognitoAuthorizer
 
   # Delete photo function (moves to recycle bin)
   DeletePhotoFunction:
@@ -88,7 +99,7 @@ Resources:
         - !Ref SharedLayerArn
       Environment:
         Variables:
-          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog/${Environment}/photos-table}}'
+          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/photos-table}}'
           PROCESSED_BUCKET: !Ref ProcessedBucketName
       Policies:
         - DynamoDBCrudPolicy:
@@ -102,6 +113,8 @@ Resources:
             RestApiId: !Ref PhotosApi
             Path: /photos/{photoId}
             Method: delete
+            Auth:
+              Authorizer: CognitoAuthorizer
 
   # Restore photo from recycle bin
   RestorePhotoFunction:
@@ -114,7 +127,7 @@ Resources:
         - !Ref SharedLayerArn
       Environment:
         Variables:
-          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog/${Environment}/photos-table}}'
+          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/photos-table}}'
           PROCESSED_BUCKET: !Ref ProcessedBucketName
       Policies:
         - DynamoDBCrudPolicy:
@@ -128,6 +141,8 @@ Resources:
             RestApiId: !Ref PhotosApi
             Path: /photos/{photoId}/restore
             Method: post
+            Auth:
+              Authorizer: CognitoAuthorizer
 
   # Get recycled photos
   GetRecycledPhotosFunction:
@@ -140,7 +155,7 @@ Resources:
         - !Ref SharedLayerArn
       Environment:
         Variables:
-          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog/${Environment}/photos-table}}'
+          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/photos-table}}'
           PROCESSED_BUCKET: !Ref ProcessedBucketName
       Policies:
         - DynamoDBReadPolicy:
@@ -154,6 +169,8 @@ Resources:
             RestApiId: !Ref PhotosApi
             Path: /photos/recycled
             Method: get
+            Auth:
+              Authorizer: CognitoAuthorizer
 
   # Generate shareable link
   GenerateShareLinkFunction:
@@ -166,9 +183,10 @@ Resources:
         - !Ref SharedLayerArn
       Environment:
         Variables:
-          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog/${Environment}/photos-table}}'
+          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/photos-table}}'
           PROCESSED_BUCKET: !Ref ProcessedBucketName
           SHARE_LINKS_TABLE: !Ref ShareLinksTable
+          API_BASE_URL: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/api-endpoint}}'
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref ShareLinksTable
@@ -183,6 +201,8 @@ Resources:
             RestApiId: !Ref PhotosApi
             Path: /photos/{photoId}/share
             Method: post
+            Auth:
+              Authorizer: CognitoAuthorizer
 
   # Get shared photo
   GetSharedPhotoFunction:
@@ -195,13 +215,14 @@ Resources:
         - !Ref SharedLayerArn
       Environment:
         Variables:
-          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog/${Environment}/photos-table}}'
+          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/photos-table}}'
+          API_BASE_URL: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/api-endpoint}}'
           PROCESSED_BUCKET: !Ref ProcessedBucketName
           SHARE_LINKS_TABLE: !Ref ShareLinksTable
       Policies:
-        - DynamoDBReadPolicy:
+        - DynamoDBCrudPolicy:
             TableName: !Ref ShareLinksTable
-        - DynamoDBReadPolicy:
+        - DynamoDBCrudPolicy:
             TableName: '*'
         - S3ReadPolicy:
             BucketName: !Ref ProcessedBucketName
@@ -219,7 +240,7 @@ Resources:
   ShareLinksTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub photo-blog-share-links-${Environment}
+      TableName: !Sub photo-blog-app-share-links-${Environment}
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: shareToken
@@ -231,10 +252,17 @@ Resources:
         AttributeName: expiresAt
         Enabled: true
       # DR Replication to backup region
-      GlobalTableConfiguration:
-        ReplicationGroup:
-          - Region: !Ref AWS::Region
-          - Region: !Sub '{{resolve:ssm:/photo-blog/${Environment}/dr-region}}'
+      # GlobalTableConfiguration:
+      #   ReplicationGroup:
+      #     - Region: !Ref AWS::Region
+      #     - Region: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/dr-region}}'
+
+  # Log Groups for Lambda Functions with retention periods
+  GetUploadUrlFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${GetUploadUrlFunction}'
+      RetentionInDays: 5
 
 Outputs:
   PhotosApiEndpoint:

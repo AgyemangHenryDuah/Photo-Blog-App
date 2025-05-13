@@ -1,7 +1,20 @@
 {
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.804.0",
+    "@aws-sdk/client-s3": "^3.504.0",
+    "@aws-sdk/client-sqs": "^3.504.0",
+    "@aws-sdk/client-sns": "^3.504.0",
+    "@aws-sdk/client-ses": "^3.504.0",
+    "@aws-sdk/client-dynamodb": "^3.804.0",
+    "@aws-sdk/lib-dynamodb": "^3.804.0",
+    "@aws-sdk/client-sfn": "^3.485.0",
+    "@aws-sdk/credential-providers": "^3.504.0",
+    "@aws-sdk/s3-request-presigner": "^3.504.0",
+    "@aws-sdk/client-cognito-identity-provider": "^3.804.0",
+    "@aws-sdk/util-create-request": "^3.504.0",
+    "@aws-sdk/util-dynamodb": "^3.504.0",
     "uuid": "^9.0.1",
-    "human-friendly-date": "^1.0.2"
+    "human-friendly-date": "^1.0.2",
+    "aws-crt": "^1.21.0",
+    "sharp": "^0.33.2"
   }
 }

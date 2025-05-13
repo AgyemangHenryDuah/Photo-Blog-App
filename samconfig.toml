@@ -1,42 +1,25 @@
 version = 0.1
-[default]
-[default.global.parameters]
-stack_name = "photo-blog-app"
 
-[default.build.parameters]
-cached = true
-parallel = true
-
-[default.validate.parameters]
-lint = true
-
-[default.deploy.parameters]
-capabilities = "CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND"
+[dev]
+[dev.deploy.parameters]
+stack_name = "photo-blog-app-dev"
 confirm_changeset = true
 resolve_s3 = true
 s3_prefix = "photo-blog-app"
-region = "us-east-1"
-parameter_overrides = "Environment=\"dev\" DomainName=\"dev.mscv2group3.link\" PrimaryRegion=\"us-east-1\" BackupRegion=\"us-west-2\""
-
-[default.package.parameters]
-resolve_s3 = true
-
-[default.sync.parameters]
-watch = true
-
-[dev]
-[dev.global.parameters]
-stack_name = "photo-blog-app-dev"
-
-[dev.deploy.parameters]
-parameter_overrides = "Environment=\"dev\" DomainName=\"dev.mscv2group3.link\" PrimaryRegion=\"us-east-1\" BackupRegion=\"us-west-2\""
-s3_prefix = "photo-blog-app-dev"
+region = "eu-central-1"
+cached = true
+parallel = true
+capabilities = "CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND"
+parameter_overrides = "Environment=\"dev\" DomainName=\"mscv2group3.link\" PrimaryRegion=\"eu-central-1\" BackupRegion=\"eu-west-1\""
 
 [prod]
-[prod.global.parameters]
-stack_name = "photo-blog-app-prod"
-
 [prod.deploy.parameters]
-parameter_overrides = "Environment=\"prod\" DomainName=\"mscv2group1.link\" PrimaryRegion=\"us-east-1\" BackupRegion=\"us-west-2\""
-s3_prefix = "photo-blog-app-prod"
+stack_name = "photo-blog-app-prod"
 confirm_changeset = true
+resolve_s3 = true
+s3_prefix = "photo-blog-app-prod"
+region = "eu-central-1"
+cached = true
+parallel = true
+capabilities = "CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND"
+parameter_overrides = "Environment=\"prod\" DomainName=\"mscv2group3.link\" PrimaryRegion=\"eu-central-1\" BackupRegion=\"eu-west-1\""

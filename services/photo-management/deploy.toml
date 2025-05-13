@@ -1,0 +1,25 @@
+version = 0.1
+
+[photo-management.deploy.parameters]
+stack_name = "photo-blog-app-photo-management-dev"
+confirm_changeset = true
+resolve_s3 = true
+s3_prefix = "photo-blog-app-photo-management"
+region = "eu-central-1"
+cached = true
+parallel = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "Environment=\"dev\" ProcessedBucketName=\"{{resolve:ssm:/photo-blog-app/dev/processed-bucket}}\" SharedLayerArn=\"{{resolve:ssm:/photo-blog-app/dev/shared-layer}}\" PhotosTableName=\"{{resolve:ssm:/photo-blog-app/dev/photos-table}}\" UserPoolArn=\"{{resolve:ssm:/photo-blog-app/dev/user-pool-arn}}\""
+
+[photo-management.build.parameters]
+cached = true
+parallel = true
+template_file = "template.yaml"
+
+
+# TO USE THIS FILE TO DEPLOY YOUR INDEPENDENT SERVICE, run the following commands the project's root directory:
+#
+# cd services/photo-management
+# sam validate && sam validate --lint
+# sam build --config-file deploy.toml --config-env photo-management
+# sam deploy --config-file deploy.toml --config-env photo-management

@@ -5,35 +5,58 @@ Description: Image Processing Workflow with Step Functions and Lambda Functions
 Parameters:
   Environment:
     Type: String
-  StagingBucketName:
-    Type: String
+    Default: dev
+    Description: Deployment environment (dev, prod)
   ProcessedBucketName:
     Type: String
+    Description: Name of the S3 bucket for processed images
   SharedLayerArn:
     Type: String
+    Description: ARN of the shared Lambda layer
 
+Globals:
+  Function:
+    Runtime: nodejs20.x
 
 Resources:
+  # S3 Bucket for staging image uploads
+  StagingBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub photo-blog-staging-${AWS::StackName}-${AWS::Region}
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldFiles
+            Status: Enabled
+            ExpirationInDays: 1
   
-  TriggerStepFunction:
+  # Lambda function to trigger the Step Function on S3 uploads
+  UploadTriggerStepFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: ./
       Handler: src/functions/triggerStepFunction.handler
       Environment:
         Variables:
-          STATE_MACHINE_ARN: !Ref ImageProcessingStateMachine
+          STATE_MACHINE_ARN: !GetAtt ImageProcessingStateMachine.Arn
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: states:StartExecution
+              Resource: !GetAtt ImageProcessingStateMachine.Arn
       Events:
-        SQSTrigger:
+        S3Event:
           Type: S3
           Properties:
-            Bucket: !Ref StagingBucketName
+            Bucket: !Ref StagingBucket
             Events: s3:ObjectCreated:*
   
+  # State Machine for image processing workflow
   ImageProcessingStateMachine:
     Type: AWS::Serverless::StateMachine
     Properties:
-      RoleArn: !GetAtt StepFunctionExecutionRole.Arn
+      Type: STANDARD
       DefinitionUri: src/statemachine/definition.asl.json
       DefinitionSubstitutions:
         ExtractMetadataFunctionArn: !GetAtt ExtractMetadataFunction.Arn
@@ -43,9 +66,11 @@ Resources:
         CleanupOriginalFunctionArn: !GetAtt CleanupOriginalFunction.Arn
         SendFinalNotificationFunctionArn: !GetAtt SendFinalNotificationFunction.Arn
         SendFailEmailFunctionArn: !GetAtt SendFailEmailFunction.Arn
+      Role: !GetAtt StepFunctionExecutionRole.Arn
       Tracing:
         Enabled: true
   
+  # IAM Role for Step Function execution
   StepFunctionExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -56,32 +81,23 @@ Resources:
             Principal:
               Service: states.amazonaws.com
             Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaRole
       Policies:
-        - PolicyName: StepFunctionExecutionPolicy
+        - PolicyName: StepFunctionS3Access
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - Effect: Allow
-                Action:
-                  - lambda:InvokeFunction
-                Resource:
-                  - !GetAtt ExtractMetadataFunction.Arn
-                  - !GetAtt UpdateDatabaseStatusFunction.Arn
-                  - !GetAtt ApplyWatermarkFunction.Arn
-                  - !GetAtt CleanupOriginalFunction.Arn
-                  - !GetAtt SendStartNotificationFunction.Arn
-                  - !GetAtt SendFailEmailFunction.Arn
-                  - !GetAtt SendFinalNotificationFunction.Arn
               - Effect: Allow
                 Action:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
                 Resource:
-                  - !Sub arn:aws:s3:::${StagingBucketName}/*
+                  - !Sub arn:aws:s3:::photo-blog-staging-${AWS::StackName}-${AWS::Region}/*
                   - !Sub arn:aws:s3:::${ProcessedBucketName}/*
-                    
   
+  # Lambda function to extract metadata
   ExtractMetadataFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -92,14 +108,15 @@ Resources:
       Description: Makes DB queries to extract all needed metadata for the image processing workflow
       Environment:
         Variables:
-          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/photos-table}}'
+          PHOTOS_TABLE: !Ref PhotosTable
           USERS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/users-table}}'
       Policies:
         - DynamoDBReadPolicy:
-            TableName: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/photos-table}}'
+            TableName: !Ref PhotosTable
         - DynamoDBReadPolicy:
             TableName: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/users-table}}'
 
+  # Lambda function to update database status
   UpdateDatabaseStatusFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -110,14 +127,15 @@ Resources:
       Description: Makes DB writings to update image processing status
       Environment:
         Variables:
-          PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/photos-table}}'
+          PHOTOS_TABLE: !Ref PhotosTable
           USERS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/users-table}}'
       Policies:
         - DynamoDBCrudPolicy:
-            TableName: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/photos-table}}'
+            TableName: !Ref PhotosTable
         - DynamoDBCrudPolicy:
             TableName: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/users-table}}'
 
+  # Lambda function to apply watermark to images
   ApplyWatermarkFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -127,16 +145,18 @@ Resources:
         - !Ref SharedLayerArn
       Description: Applies watermark to images
       Timeout: 60
-      Policies:
-        - S3ReadPolicy:
-            BucketName: !Ref StagingBucketName
-        - S3WritePolicy:
-            BucketName: !Ref ProcessedBucketName
+      MemorySize: 512
       Environment:
         Variables:
-          STAGING_BUCKET: !Ref StagingBucketName
+          STAGING_BUCKET: !Sub photo-blog-staging-${AWS::StackName}-${AWS::Region}
           PROCESSED_BUCKET: !Ref ProcessedBucketName
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Sub photo-blog-staging-${AWS::StackName}-${AWS::Region}
+        - S3WritePolicy:
+            BucketName: !Ref ProcessedBucketName
 
+  # Lambda function to clean up original images
   CleanupOriginalFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -145,13 +165,14 @@ Resources:
       Layers:
         - !Ref SharedLayerArn
       Description: Deletes original image from staging bucket
-      Policies:
-        - S3CrudPolicy:
-            BucketName: !Ref StagingBucketName
       Environment:
         Variables:
-          STAGING_BUCKET: !Ref StagingBucketName
+          STAGING_BUCKET: !Sub photo-blog-staging-${AWS::StackName}-${AWS::Region}
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Sub photo-blog-staging-${AWS::StackName}-${AWS::Region}
 
+  # Lambda function to send start notification
   SendStartNotificationFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -169,6 +190,7 @@ Resources:
                 - ses:SendRawEmail
               Resource: "*"
       
+  # Lambda function to send failure notification
   SendFailEmailFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -186,6 +208,7 @@ Resources:
                 - ses:SendRawEmail
               Resource: "*"
       
+  # Lambda function to send success notification
   SendFinalNotificationFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -202,3 +225,46 @@ Resources:
                 - ses:SendEmail
                 - ses:SendRawEmail
               Resource: "*"  
+              
+  # DynamoDB table for photos metadata
+  PhotosTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub photo-blog-app-photos-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: photoId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: photoId
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: PhotosByStatus
+          KeySchema:
+            - AttributeName: photoId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+Outputs:
+  ImageProcessingStateMachineArn:
+    Description: ARN of the image processing state machine
+    Value: !GetAtt ImageProcessingStateMachine.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-StateMachineArn
+
+  PhotosTableName:
+    Description: DynamoDB table for photo metadata
+    Value: !Ref PhotosTable
+    Export:
+      Name: !Sub ${AWS::StackName}-PhotosTable
+
+  StagingBucketName:
+    Description: S3 bucket for image staging
+    Value: !Ref StagingBucket
+    Export:
+      Name: !Sub ${AWS::StackName}-StagingBucket
