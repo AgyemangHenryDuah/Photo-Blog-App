@@ -272,7 +272,7 @@ Outputs:
       Name: !Sub ${AWS::StackName}-ApiEndpoint
       
   ShareLinksTableName:
-    Description: DynamoDB table for share links
+    Description: DynamoDB table for share photo links
     Value: !Ref ShareLinksTable
     Export:
       Name: !Sub ${AWS::StackName}-ShareLinksTable
