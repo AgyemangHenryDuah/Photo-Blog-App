@@ -27,6 +27,8 @@ exports.handler = async (event) => {
 
     const timestamp = Date.now();
 
+    console.log('Photo ID: ', photoId, 'User ID: ', userId);
+
     const command = new UpdateCommand({
       TableName: PHOTOS_TABLE,
       Key: {

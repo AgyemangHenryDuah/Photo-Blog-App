@@ -12,7 +12,7 @@ Parameters:
     Description: Deployment environment
   DomainName:
     Type: String
-    Default: dev.mscv2group3.link
+    Default: mscv2group3.link
     Description: Domain name for the application
   PrimaryRegion:
     Type: String

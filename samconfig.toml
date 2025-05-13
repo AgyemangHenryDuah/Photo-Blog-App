@@ -10,7 +10,7 @@ region = "eu-central-1"
 cached = true
 parallel = true
 capabilities = "CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND"
-parameter_overrides = "Environment=\"dev\" DomainName=\"dev.mscv2group3.link\" PrimaryRegion=\"eu-central-1\" BackupRegion=\"eu-west-1\""
+parameter_overrides = "Environment=\"dev\" DomainName=\"mscv2group3.link\" PrimaryRegion=\"eu-central-1\" BackupRegion=\"eu-west-1\""
 
 [prod]
 [prod.deploy.parameters]

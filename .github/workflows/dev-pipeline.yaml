@@ -15,7 +15,7 @@ env:
   AWS_REGION: eu-central-1
   DR_REGION: eu-west-1
   ENVIRONMENT: dev
-  DOMAIN_NAME: dev.mscv2group3.link
+  DOMAIN_NAME: mscv2group3.link
 
 permissions:
   id-token: write
