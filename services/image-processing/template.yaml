@@ -43,8 +43,7 @@ Resources:
       Timeout: 180
       MemorySize: 1024
       Layers:
-        - !Ref SharedLayerArn  # Use the parameter directly
-        - !Ref ImageProcessingLayer  # Layer for image processing libraries
+        - !Ref SharedLayerArn
       Environment:
         Variables:
           STAGING_BUCKET: !Ref StagingBucket
@@ -76,7 +75,7 @@ Resources:
       Handler: index.handler
       Description: Triggers image processing when new image is uploaded
       Layers:
-        - !Ref SharedLayerArn  # Use the parameter directly
+        - !Ref SharedLayerArn
       Environment:
         Variables:
           PROCESSING_QUEUE: !Ref ImageProcessingQueue
@@ -98,7 +97,7 @@ Resources:
       Handler: index.handler
       Description: Retries failed image processing tasks
       Layers:
-        - !Ref SharedLayerArn  # Use the parameter directly
+        - !Ref SharedLayerArn
       Environment:
         Variables:
           PROCESSING_QUEUE: !Ref ImageProcessingQueue
