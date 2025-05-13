@@ -1,6 +1,7 @@
 const { CognitoIdentityProviderClient, ConfirmSignUpCommand } = require('@aws-sdk/client-cognito-identity-provider');
 const { createResponse, checkUserInDynamoDB } = require('./helpers/shared');
 const { updateUserStatus } = require('./helpers/confirmSignup');
+const { sendEmail } = require('./helpers/sendEmail');
 
 const cognitoClient = new CognitoIdentityProviderClient({});
 
@@ -29,6 +30,9 @@ exports.handler = async (event) => {
         if (user) {
             /* Update the user's status to "verified" in DynamoDB */
             await updateUserStatus(user.userId, 'verified');
+
+            /* After successful confirmation, send welcome email */
+            await sendEmail(email, user.firstName, 'signup');
         } else {
             return createResponse(400, {
                 error: 'User not found. Please ensure the email is correct.',

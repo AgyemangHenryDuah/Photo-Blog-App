@@ -9,7 +9,7 @@ region = "eu-central-1"
 cached = true
 parallel = true
 capabilities = "CAPABILITY_IAM"
-parameter_overrides = "Environment=\"dev\" DomainName=\"dev.mscv2group3.link\" SharedLayerArn=\"{{resolve:ssm:/photo-blog-app/dev/shared-layer}}\""
+parameter_overrides = "Environment=\"dev\" DomainName=\"mscv2group3.link\" SharedLayerArn=\"{{resolve:ssm:/photo-blog-app/dev/shared-layer}}\""
 
 [auth.build.parameters]
 cached = true
