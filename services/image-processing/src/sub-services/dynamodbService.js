@@ -1,15 +1,16 @@
-const { DynamoDBDocumentClient, PutCommand, GetCommand, UpdateCommand, DeleteCommand, QueryCommand, ScanCommand } = require('@aws-sdk/lib-dynamodb');
+const { DynamoDBDocumentClient, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
 const { dynamoClient } = require('../config/aws');
 
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 const PHOTOS_TABLE = process.env.PHOTOS_TABLE;
+const USERS_TABLE = process.env.USERS_TABLE;
 
 class DynamoService {
     static async getImageMetadata(imageId) {
         const command = {
             TableName: PHOTOS_TABLE,
             Key: { imageId: imageId },
-            ProjectionExpression: "imageId, imageName, imageSize, imageType, imageUrl, createdAt"
+            ProjectionExpression: "photoId, userId, status, processedAt",
         };
         const result = await docClient.send(command)
 
@@ -31,7 +32,7 @@ class DynamoService {
 
     static async getUserDetails(userId) {
         const command = {
-            TABLE_NAME: process.env.USERS_TABLE,
+            TableName: USERS_TABLE,
             Key: { userId: userId },
             ProjectionExpression: "userId, email, firstname, lastname"
         }

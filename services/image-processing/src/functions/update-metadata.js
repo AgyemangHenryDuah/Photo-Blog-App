@@ -1,75 +1,45 @@
-const { userInfo } = require('os');
+const { stat } = require('fs');
 const DynamoService = require('../sub-services/dynamodbService');
 
 module.exports.handler = async (event) => {
     try {
-        const inputData = JSON.parse(event.body);
+        const { photoId, status, processedAt, processedLocation } = event;
 
-        if (!inputData.imageId) {
-            return {
-                statusCode: 400,
-                body: JSON.stringify({ message: 'imageId is required' })
-            };
+        if (!photoId) {
+            throw new Error('photoId is required');
         }
 
         const updateExpression = [];
         const ExpressionAttributeValues = {};
 
-        if (inputData.status) {
+        if (status) {
             updateExpression.push('status = :status');
-            ExpressionAttributeValues[':status'] = inputData.status;
+            ExpressionAttributeValues[':status'] = status;
         }
 
-        if (inputData.processingDate) {
+        if (processedAt) {
             updateExpression.push('processedAt = :processedAt');
-            ExpressionAttributeValues[':processedAt'] = inputData.processedAt;
+            ExpressionAttributeValues[':processedAt'] = processedAt;
         }
 
-        // Add processed location (s3Key) to update if provided
-        if (inputData.processedLocation) {
-            updateExpression.push('s3Key = :s3Key');
-            ExpressionAttributeValues[':s3Key'] = inputData.processedLocation.s3Key;
-        }
-
-        // Check if there are any fields to update
         if (updateExpression.length === 0) {
-            return {
-                statusCode: 400,
-                body: JSON.stringify({ message: 'No valid fields to update' })
-            };
+            throw new Error('No valid fields to update');
         }
 
-        // Call the service method to update the metadata
         const updatedItem = await DynamoService.updateImageMetadata(
-            inputData.imageId,
-            updateExpression,
+            photoId,
+            updateExpression.join(', '),
             ExpressionAttributeValues
         );
 
-        // Return success response
         return {
-            statusCode: 200,
-            body: {
-                imageInfo: {
-                    s3Key: updatedItem.processedLocation.s3Key,
-                    imageId: updatedItem.imageId,
-
-                }
-
-            }
-
+            photoId: updatedItem.photoId,
+            status: updatedItem.status,
+            processedAt: updatedItem.processedAt
         }
     }
     catch (error) {
         console.error("Error in updating image metadata:", error);
-
-        // Return error response
-        return {
-            statusCode: 500,
-            body: JSON.stringify({
-                message: 'Failed to update image metadata',
-                error: error.message
-            })
-        };
+        throw error;
     }
 }
