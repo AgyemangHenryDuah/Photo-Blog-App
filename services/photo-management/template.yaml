@@ -219,6 +219,7 @@ Resources:
           # API_BASE_URL: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/api-endpoint}}' //removed for now. parameter doesn't get created during first deployments
           PROCESSED_BUCKET: !Ref ProcessedBucketName
           SHARE_LINKS_TABLE: !Ref ShareLinksTable
+          ENVIRONMENT_NAME: !Ref Environment
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref ShareLinksTable
@@ -226,6 +227,8 @@ Resources:
             TableName: '*'
         - S3ReadPolicy:
             BucketName: !Ref ProcessedBucketName
+        - SSMParameterReadPolicy:
+            ParameterName: '*'
       Events:
         ApiEvent:
           Type: Api

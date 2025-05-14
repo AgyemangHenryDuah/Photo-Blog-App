@@ -1,6 +1,5 @@
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, PutCommand, GetCommand } = require('@aws-sdk/lib-dynamodb');
-const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { v4: uuidv4 } = require('uuid');
 const { SSMClient, GetParameterCommand } = require('@aws-sdk/client-ssm');
 
@@ -14,15 +13,14 @@ const ddbDocClient = DynamoDBDocumentClient.from(ddbClient, {
     removeUndefinedValues: true
   }
 });
-const s3Client = new S3Client({ region: process.env.PRIMARY_REGION || 'eu-central-1' });
 
 // Environment variables
 const PHOTOS_TABLE = process.env.PHOTOS_TABLE;
-const PROCESSED_BUCKET = process.env.PROCESSED_BUCKET;
 const SHARE_LINKS_TABLE = process.env.SHARE_LINKS_TABLE;
 
-const response = await ssmClient.send(new GetParameterCommand({ Name: '/photo-blog-app/dev/api-endpoint', WithDecryption: true }));
+const response = await ssmClient.send(new GetParameterCommand({ Name: `/photo-blog-app/${process.env.ENVIRONMENT_NAME}/api-endpoint`, WithDecryption: true }));
 const API_BASE_URL = response.Parameter.Value;
+console.log('API_BASE_URL: ', API_BASE_URL);
 
 // Constants
 const SHARE_EXPIRATION_HOURS = 3;
