@@ -2,7 +2,7 @@
 const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, GetCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
-const sharp = require('sharp');
+const { createCanvas, loadImage } = require('canvas');
 const stream = require('stream');
 
 const { createResponse, parseBody, handleError } = require('/opt/nodejs/shared-utils/eventHandler.js');
@@ -13,7 +13,7 @@ const dynamoClient = new DynamoDBClient();
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
 exports.handler = async (event) => {
-
+  
   console.log('Architecture:', process.arch);
 
   console.log('Processing SQS event:', JSON.stringify(event, null, 2));
@@ -63,7 +63,7 @@ exports.handler = async (event) => {
       }
       
       const firstName = photoData.firstName || 'mscv2'; // Default if not found
-      const lastName = photoData.lastName || 'group3';      // Default if not found
+      const lastName = photoData.lastName || 'group3';  // Default if not found
       
       // Get the current date for the watermark
       const currentDate = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
@@ -83,9 +83,9 @@ exports.handler = async (event) => {
       // Convert the stream to a buffer
       const imageBuffer = await streamToBuffer(imageStream);
       
-      // Process the image with sharp - add watermark
+      // Process the image with canvas - add watermark
       console.log('Processing image with watermark');
-      const processedImageBuffer = await addWatermark(imageBuffer, watermarkText, fileExt);
+      const processedImageBuffer = await addWatermarkWithCanvas(imageBuffer, watermarkText, fileExt);
       
       // Upload the processed image to the processed bucket
       // Keep the same structure: users/userId/photoId.ext
@@ -124,7 +124,6 @@ exports.handler = async (event) => {
         },
         ReturnValues: 'UPDATED_NEW'
       };
-
       
       await docClient.send(new UpdateCommand(updateParams));
       
@@ -137,115 +136,56 @@ exports.handler = async (event) => {
   }
   
   return createResponse(200, { message: 'Image processing completed successfully' });
-  
 };
 
-// Function to add watermark to an image
-// async function addWatermark(imageBuffer, watermarkText, format) {
-//   try {
-//     // Calculate image dimensions to position the watermark properly
-//     const metadata = await sharp(imageBuffer).metadata();
-//     const { width, height } = metadata;
-    
-//     // Create an SVG with the watermark text - positioned at bottom right corner with gray color
-//     const svgBuffer = Buffer.from(`
-//       <svg width="${width}" height="${height}">
-//         <style>
-//           .watermark {
-//             fill: rgba(128, 128, 128, 0.7); /* Gray with 70% opacity */
-//             font-size: 24px;
-//             font-family: Arial, sans-serif;
-//             font-weight: bold;
-//           }
-//         </style>
-//         <text x="${width - 20}" y="${height - 20}" text-anchor="end" class="watermark">${watermarkText}</text>
-//       </svg>
-//     `);
-    
-//     // Apply the watermark
-//     let sharpInstance = sharp(imageBuffer)
-//       .composite([{
-//         input: svgBuffer,
-//         gravity: 'southeast'
-//       }]);
-    
-//     // Ensure proper output format
-//     if (format === 'jpg' || format === 'jpeg') {
-//       sharpInstance = sharpInstance.jpeg({ quality: 90 });
-//     } else if (format === 'png') {
-//       sharpInstance = sharpInstance.png({ compressionLevel: 9 });
-//     } else if (format === 'webp') {
-//       sharpInstance = sharpInstance.webp({ quality: 90 });
-//     } else if (format === 'gif') {
-//       sharpInstance = sharpInstance.gif();
-//     }
-    
-//     return await sharpInstance.toBuffer();
-//   } catch (error) {
-//     console.error('Error adding watermark:', error);
-//     throw error;
-//   }
-// }
-
-async function addWatermark(imageBuffer, watermarkText, format) {
+// Function to add watermark using canvas (no dependency on system fonts)
+async function addWatermarkWithCanvas(imageBuffer, watermarkText, format) {
   try {
-    // Calculate image dimensions to position the watermark properly
-    const metadata = await sharp(imageBuffer).metadata();
-    const { width, height } = metadata;
+    // Load the image
+    const image = await loadImage(imageBuffer);
+    const width = image.width;
+    const height = image.height;
     
-    // Create a simple watermark image with text
-    // This approach avoids font system dependencies
-    const watermarkImageBuffer = await createWatermarkImage(width, watermarkText);
+    // Create a canvas with the image dimensions
+    const canvas = createCanvas(width, height);
+    const ctx = canvas.getContext('2d');
     
-    // Apply the watermark
-    let sharpInstance = sharp(imageBuffer)
-      .composite([{
-        input: watermarkImageBuffer,
-        gravity: 'southeast'
-      }]);
+    // Draw the original image on the canvas
+    ctx.drawImage(image, 0, 0, width, height);
     
-    // Ensure proper output format
+    // Configure watermark text styling
+    ctx.fillStyle = 'rgba(128, 128, 128, 0.7)'; // Gray with 70% opacity
+    
+    // Use a generic font that's available in the canvas package
+    // No dependency on system fonts
+    const fontSize = Math.max(16, Math.floor(width / 40)); // Scale font with image size
+    ctx.font = `bold ${fontSize}px sans-serif`;
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'bottom';
+    
+    // Calculate position (bottom right corner with padding)
+    const padding = Math.floor(fontSize / 2);
+    const xPosition = width - padding;
+    const yPosition = height - padding;
+    
+    // Add the watermark text
+    ctx.fillText(watermarkText, xPosition, yPosition);
+    
+    // Convert to buffer with appropriate format
     if (format === 'jpg' || format === 'jpeg') {
-      sharpInstance = sharpInstance.jpeg({ quality: 90 });
+      return canvas.toBuffer('image/jpeg', { quality: 0.9 });
     } else if (format === 'png') {
-      sharpInstance = sharpInstance.png({ compressionLevel: 9 });
+      return canvas.toBuffer('image/png', { compressionLevel: 9 });
     } else if (format === 'webp') {
-      sharpInstance = sharpInstance.webp({ quality: 90 });
-    } else if (format === 'gif') {
-      sharpInstance = sharpInstance.gif();
+      return canvas.toBuffer('image/webp', { quality: 0.9 });
+    } else {
+      // Default to PNG for unsupported formats
+      return canvas.toBuffer('image/png');
     }
-    
-    return await sharpInstance.toBuffer();
   } catch (error) {
-    console.error('Error adding watermark:', error);
+    console.error('Error adding watermark with canvas:', error);
     throw error;
   }
-}
-
-// Helper function to create a watermark image without relying on system fonts
-async function createWatermarkImage(width, watermarkText) {
-  // Create an SVG that uses generic font-family values instead of specific fonts
-  const paddingRight = 20;
-  const paddingBottom = 20;
-  const svgWidth = Math.min(width, watermarkText.length * 15 + 40); // Estimate text width
-  const svgHeight = 40;
-  
-  const svgBuffer = Buffer.from(`
-    <svg width="${svgWidth}" height="${svgHeight}">
-      <rect x="0" y="0" width="${svgWidth}" height="${svgHeight}" 
-            fill="rgba(255, 255, 255, 0.4)" rx="5" ry="5" />
-      <text x="${svgWidth/2}" y="${svgHeight/2 + 8}" 
-            font-family="sans-serif" 
-            font-size="18px" 
-            text-anchor="middle" 
-            fill="rgba(80, 80, 80, 0.8)">${watermarkText}</text>
-    </svg>
-  `);
-  
-  // Convert the SVG to a PNG buffer
-  return await sharp(svgBuffer)
-    .png()
-    .toBuffer();
 }
 
 // Function to convert a stream to a buffer
