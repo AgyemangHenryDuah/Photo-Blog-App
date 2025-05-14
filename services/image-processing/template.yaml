@@ -61,6 +61,11 @@ Resources:
         - SQSPollerPolicy:
             QueueName: !GetAtt ImageProcessingQueue.QueueName
         - arn:aws:iam::aws:policy/AmazonSESFullAccess
+        - Statement:
+            - Effect: Allow
+              Action:
+                - lambda:GetLayerVersion
+              Resource: arn:aws:lambda:us-west-2:347599033421:layer:amazon_linux_fonts:1
       Events:
         SQSEvent:
           Type: SQS
