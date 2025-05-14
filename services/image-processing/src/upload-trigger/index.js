@@ -1,6 +1,6 @@
 // Upload trigger function - Triggered when a new image is uploaded to the staging bucket
 const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
-const { createResponse } = require('../../../../common/layers/nodejs/shared-utils/eventHandler');
+const { createResponse, handleError } = require('/opt/nodejs/shared-utils/eventHandler.js');
 const sqs = new SQSClient();
 
 exports.handler = async (event) => {
@@ -69,7 +69,7 @@ exports.handler = async (event) => {
     await Promise.all(promises);
     
     return createResponse(200, { message: 'Images queued for processing' });
-    
+
   } catch (error) {
     console.error('Error processing S3 event:', error);
     throw error;

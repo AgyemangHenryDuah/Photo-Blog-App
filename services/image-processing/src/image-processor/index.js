@@ -103,13 +103,17 @@ exports.handler = async (event) => {
       
       // Update the photo record in DynamoDB with photoUrl and status
       console.log(`Updating photo metadata in DynamoDB table ${photosTable}`);
+      
       const updateParams = {
         TableName: photosTable,
         Key: {
           userId,
           photoId
         },
-        UpdateExpression: 'SET photoUrl = :photoUrl, status = :status, updatedAt = :updatedAt',
+        UpdateExpression: 'SET photoUrl = :photoUrl, #st = :status, updatedAt = :updatedAt',
+        ExpressionAttributeNames: {
+          '#st': 'status'
+        },
         ExpressionAttributeValues: {
           ':photoUrl': photoUrl,
           ':status': 'processed',
@@ -117,6 +121,7 @@ exports.handler = async (event) => {
         },
         ReturnValues: 'UPDATED_NEW'
       };
+
       
       await docClient.send(new UpdateCommand(updateParams));
       

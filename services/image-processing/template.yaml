@@ -44,6 +44,7 @@ Resources:
       MemorySize: 1024
       Layers:
         - !Ref SharedLayerArn
+        - arn:aws:lambda:us-west-2:347599033421:layer:amazon_linux_fonts:1
       Environment:
         Variables:
           STAGING_BUCKET: !Ref StagingBucket
