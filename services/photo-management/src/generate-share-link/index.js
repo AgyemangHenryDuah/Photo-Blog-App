@@ -18,16 +18,18 @@ const ddbDocClient = DynamoDBDocumentClient.from(ddbClient, {
 const PHOTOS_TABLE = process.env.PHOTOS_TABLE;
 const SHARE_LINKS_TABLE = process.env.SHARE_LINKS_TABLE;
 
-const response = await ssmClient.send(new GetParameterCommand({ Name: `/photo-blog-app/${process.env.ENVIRONMENT_NAME}/api-endpoint`, WithDecryption: true }));
-const API_BASE_URL = response.Parameter.Value;
-console.log('API_BASE_URL: ', API_BASE_URL);
-
 // Constants
 const SHARE_EXPIRATION_HOURS = 3;
 const MS_PER_HOUR = 3600000;
 
 exports.handler = async (event) => {
+
+  const response = await ssmClient.send(new GetParameterCommand({ Name: `/photo-blog-app/${process.env.ENVIRONMENT_NAME}/api-endpoint`, WithDecryption: true }));
+  const API_BASE_URL = response.Parameter.Value;
+  console.log('API_BASE_URL: ', API_BASE_URL);
+
   try {
+
     console.log('Event:', JSON.stringify(event));
 
     const { photoId } = event.pathParameters || {};

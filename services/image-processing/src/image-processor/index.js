@@ -1,4 +1,4 @@
-const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, GetObjectCommand, PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, GetCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
 const { createCanvas, loadImage, registerFont } = require('canvas');
@@ -20,7 +20,7 @@ exports.handler = async (event) => {
   console.log('Architecture:', process.arch);
   console.log('Processing SQS event:', JSON.stringify(event, null, 2));
 
-  const response = await ssmClient.send(new GetParameterCommand({ Name: `/photo-blog-app/${process.env.ENVIRONMENT_NAME}/users-table`, WithDecryption: true })); // change [dev] to [prod] in production
+  const response = await ssmClient.send(new GetParameterCommand({ Name: `/photo-blog-app/${process.env.ENVIRONMENT_NAME}/users-table`, WithDecryption: true }));
   
   const usersTable = response.Parameter.Value;
   const stagingBucket = process.env.STAGING_BUCKET;
@@ -114,6 +114,14 @@ exports.handler = async (event) => {
         ReturnValues: 'UPDATED_NEW'
       };
       await docClient.send(new UpdateCommand(updateParams));
+
+      // Delete the original image from staging bucket after successful processing
+      const deleteObjectParams = {
+        Bucket: bucket,
+        Key: key
+      };
+      await s3.send(new DeleteObjectCommand(deleteObjectParams));
+      console.log(`Successfully deleted original image from staging bucket: ${bucket}/${key}`);
 
       console.log(`Successfully processed image: ${photoId}`);
     } catch (error) {
