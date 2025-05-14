@@ -44,7 +44,7 @@ Resources:
       MemorySize: 1024
       Layers:
         - !Ref SharedLayerArn
-        - arn:aws:lambda:us-west-2:347599033421:layer:amazon_linux_fonts:1
+        - arn:aws:lambda:us-west-2:123456789012:layer:sharp-v0-34-arm64:1
       Environment:
         Variables:
           STAGING_BUCKET: !Ref StagingBucket
@@ -65,7 +65,7 @@ Resources:
             - Effect: Allow
               Action:
                 - lambda:GetLayerVersion
-              Resource: arn:aws:lambda:us-west-2:347599033421:layer:amazon_linux_fonts:1
+              Resource: arn:aws:lambda:us-west-2:123456789012:layer:sharp-v0-34-arm64:1
       Events:
         SQSEvent:
           Type: SQS
