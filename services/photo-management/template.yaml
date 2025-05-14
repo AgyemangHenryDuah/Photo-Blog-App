@@ -186,7 +186,7 @@ Resources:
           PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/photos-table}}'
           PROCESSED_BUCKET: !Ref ProcessedBucketName
           SHARE_LINKS_TABLE: !Ref ShareLinksTable
-          API_BASE_URL: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/api-endpoint}}'
+          # API_BASE_URL: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/api-endpoint}}' //removed for now. parameter doesn't get created during first deployments
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref ShareLinksTable
@@ -216,7 +216,7 @@ Resources:
       Environment:
         Variables:
           PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/photos-table}}'
-          API_BASE_URL: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/api-endpoint}}'
+          # API_BASE_URL: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/api-endpoint}}' //removed for now. parameter doesn't get created during first deployments
           PROCESSED_BUCKET: !Ref ProcessedBucketName
           SHARE_LINKS_TABLE: !Ref ShareLinksTable
       Policies:
