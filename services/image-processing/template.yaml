@@ -10,6 +10,9 @@ Parameters:
     Type: String
   SharedLayerArn:
     Type: String
+  DomainName:
+    Type: String
+    Default: mscv2group3.link
 
 Globals:
   Function:
@@ -62,6 +65,7 @@ Resources:
           PHOTOS_TABLE: !Ref PhotosTable
           PROCESSING_QUEUE: !Ref ImageProcessingQueue
           ENVIRONMENT_NAME: !Ref Environment
+          APP_DOMAIN: !Ref DomainName
       Policies:
         - S3CrudPolicy:
             BucketName: !Ref StagingBucket
@@ -73,7 +77,13 @@ Resources:
             QueueName: !GetAtt ImageProcessingQueue.QueueName
         - arn:aws:iam::aws:policy/AmazonSESFullAccess
         - SSMParameterReadPolicy:
-            ParameterName: '*'   
+            ParameterName: '*'
+        - Statement:
+              - Effect: Allow
+                Action:
+                    - ses:SendEmail
+                    - ses:SendRawEmail
+                Resource: !Sub arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*   
       Events:
         SQSEvent:
           Type: SQS

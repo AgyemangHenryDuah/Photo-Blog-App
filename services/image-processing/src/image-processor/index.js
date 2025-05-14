@@ -6,9 +6,10 @@ const path = require('path');
 const stream = require('stream');
 const { createResponse, parseBody, handleError } = require('/opt/nodejs/shared-utils/eventHandler.js');
 const { SSMClient, GetParameterCommand } = require('@aws-sdk/client-ssm');
+const { sendEmail } = require('./email/sendEmail');
 
 // Register a custom font
-registerFont(path.join(__dirname, 'fonts/Roboto-Regular.ttf'), { family: 'Roboto' });
+registerFont(path.join(__dirname, 'font/Roboto-Regular.ttf'), { family: 'Roboto' });
 
 // Initialize clients
 const s3 = new S3Client();
@@ -77,14 +78,20 @@ exports.handler = async (event) => {
 
       console.log('USER DATA: ', userData);
 
-      const firstName = userData.firstName || 'mscv2';
-      const lastName = userData.lastName || 'group3';
+      global.firstName = userData.firstName || 'mscv2';
+      global.lastName = userData.lastName || 'group3';
+      global.email = userData.email || 'mscv2group3.link'
       const currentDate = new Date().toISOString().split('T')[0];
-      const watermarkText = `${firstName} ${lastName} | ${currentDate}`;
+      const watermarkText = `${global.firstName} ${global.lastName} | ${currentDate}`;
 
       const getObjectParams = { Bucket: bucket, Key: key };
       const { Body: imageStream } = await s3.send(new GetObjectCommand(getObjectParams));
       const imageBuffer = await streamToBuffer(imageStream);
+
+      // Notification - Image processing starts...
+      console.log('NOTIFICATION: Image processing starts...');
+      // Send mail
+      await sendEmail(global.email, global.firstName, 'start');
 
       const processedImageBuffer = await addWatermarkWithCanvas(imageBuffer, watermarkText, fileExt);
 
@@ -120,12 +127,23 @@ exports.handler = async (event) => {
         Bucket: bucket,
         Key: key
       };
+
       await s3.send(new DeleteObjectCommand(deleteObjectParams));
       console.log(`Successfully deleted original image from staging bucket: ${bucket}/${key}`);
 
+      // Notification - Image processing done
       console.log(`Successfully processed image: ${photoId}`);
+      // Send mail
+      await sendEmail(global.email, global.firstName, 'done');
+
     } catch (error) {
-      console.error('Error processing image:', error);
+        console.error('Error processing image:', error);
+      
+        // Notification - Image processing failure
+        console.log('NOTIFICATION: Image processing done.');
+        // Send mail
+        await sendEmail(global.email, global.firstName, 'fail');
+
       throw error;
     }
   }
