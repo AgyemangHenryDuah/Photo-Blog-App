@@ -13,6 +13,9 @@ const dynamoClient = new DynamoDBClient();
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
 exports.handler = async (event) => {
+  
+  console.log('Architecture:', process.arch);
+
   console.log('Processing SQS event:', JSON.stringify(event, null, 2));
   
   // Get environment variables
@@ -103,7 +106,7 @@ exports.handler = async (event) => {
       
       // Update the photo record in DynamoDB with photoUrl and status
       console.log(`Updating photo metadata in DynamoDB table ${photosTable}`);
-      
+
       const updateParams = {
         TableName: photosTable,
         Key: {

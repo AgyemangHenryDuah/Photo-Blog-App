@@ -53,6 +53,8 @@ Resources:
       Description: Processes uploaded images
       Timeout: 180
       MemorySize: 1024
+      Architectures:
+        - arm64
       Layers:
         - !Ref SharedLayerArn
         - !Ref SharpLayer
