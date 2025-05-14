@@ -17,15 +17,15 @@ Globals:
 
 Resources:
 
-  SharpLayer:
-    Type: AWS::Serverless::LayerVersion
-    Properties:
-      LayerName: SharpLayer
-      ContentUri: ../../common/layers/sharp/release-arm64.zip
-      CompatibleArchitectures:
-        - arm64
-      CompatibleRuntimes:
-        - nodejs20.x
+  # SharpLayer:
+  #   Type: AWS::Serverless::LayerVersion
+  #   Properties:
+  #     LayerName: SharpLayer
+  #     ContentUri: ../../common/layers/sharp/release-arm64.zip
+  #     CompatibleArchitectures:
+  #       - arm64
+  #     CompatibleRuntimes:
+  #       - nodejs20.x
 
   # SQS Queue for image processing
   ImageProcessingQueue:

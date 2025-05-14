@@ -13,7 +13,7 @@ const dynamoClient = new DynamoDBClient();
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
 exports.handler = async (event) => {
-  
+
   console.log('Architecture:', process.arch);
 
   console.log('Processing SQS event:', JSON.stringify(event, null, 2));
@@ -141,31 +141,66 @@ exports.handler = async (event) => {
 };
 
 // Function to add watermark to an image
+// async function addWatermark(imageBuffer, watermarkText, format) {
+//   try {
+//     // Calculate image dimensions to position the watermark properly
+//     const metadata = await sharp(imageBuffer).metadata();
+//     const { width, height } = metadata;
+    
+//     // Create an SVG with the watermark text - positioned at bottom right corner with gray color
+//     const svgBuffer = Buffer.from(`
+//       <svg width="${width}" height="${height}">
+//         <style>
+//           .watermark {
+//             fill: rgba(128, 128, 128, 0.7); /* Gray with 70% opacity */
+//             font-size: 24px;
+//             font-family: Arial, sans-serif;
+//             font-weight: bold;
+//           }
+//         </style>
+//         <text x="${width - 20}" y="${height - 20}" text-anchor="end" class="watermark">${watermarkText}</text>
+//       </svg>
+//     `);
+    
+//     // Apply the watermark
+//     let sharpInstance = sharp(imageBuffer)
+//       .composite([{
+//         input: svgBuffer,
+//         gravity: 'southeast'
+//       }]);
+    
+//     // Ensure proper output format
+//     if (format === 'jpg' || format === 'jpeg') {
+//       sharpInstance = sharpInstance.jpeg({ quality: 90 });
+//     } else if (format === 'png') {
+//       sharpInstance = sharpInstance.png({ compressionLevel: 9 });
+//     } else if (format === 'webp') {
+//       sharpInstance = sharpInstance.webp({ quality: 90 });
+//     } else if (format === 'gif') {
+//       sharpInstance = sharpInstance.gif();
+//     }
+    
+//     return await sharpInstance.toBuffer();
+//   } catch (error) {
+//     console.error('Error adding watermark:', error);
+//     throw error;
+//   }
+// }
+
 async function addWatermark(imageBuffer, watermarkText, format) {
   try {
     // Calculate image dimensions to position the watermark properly
     const metadata = await sharp(imageBuffer).metadata();
     const { width, height } = metadata;
     
-    // Create an SVG with the watermark text - positioned at bottom right corner with gray color
-    const svgBuffer = Buffer.from(`
-      <svg width="${width}" height="${height}">
-        <style>
-          .watermark {
-            fill: rgba(128, 128, 128, 0.7); /* Gray with 70% opacity */
-            font-size: 24px;
-            font-family: Arial, sans-serif;
-            font-weight: bold;
-          }
-        </style>
-        <text x="${width - 20}" y="${height - 20}" text-anchor="end" class="watermark">${watermarkText}</text>
-      </svg>
-    `);
+    // Create a simple watermark image with text
+    // This approach avoids font system dependencies
+    const watermarkImageBuffer = await createWatermarkImage(width, watermarkText);
     
     // Apply the watermark
     let sharpInstance = sharp(imageBuffer)
       .composite([{
-        input: svgBuffer,
+        input: watermarkImageBuffer,
         gravity: 'southeast'
       }]);
     
@@ -185,6 +220,32 @@ async function addWatermark(imageBuffer, watermarkText, format) {
     console.error('Error adding watermark:', error);
     throw error;
   }
+}
+
+// Helper function to create a watermark image without relying on system fonts
+async function createWatermarkImage(width, watermarkText) {
+  // Create an SVG that uses generic font-family values instead of specific fonts
+  const paddingRight = 20;
+  const paddingBottom = 20;
+  const svgWidth = Math.min(width, watermarkText.length * 15 + 40); // Estimate text width
+  const svgHeight = 40;
+  
+  const svgBuffer = Buffer.from(`
+    <svg width="${svgWidth}" height="${svgHeight}">
+      <rect x="0" y="0" width="${svgWidth}" height="${svgHeight}" 
+            fill="rgba(255, 255, 255, 0.4)" rx="5" ry="5" />
+      <text x="${svgWidth/2}" y="${svgHeight/2 + 8}" 
+            font-family="sans-serif" 
+            font-size="18px" 
+            text-anchor="middle" 
+            fill="rgba(80, 80, 80, 0.8)">${watermarkText}</text>
+    </svg>
+  `);
+  
+  // Convert the SVG to a PNG buffer
+  return await sharp(svgBuffer)
+    .png()
+    .toBuffer();
 }
 
 // Function to convert a stream to a buffer
