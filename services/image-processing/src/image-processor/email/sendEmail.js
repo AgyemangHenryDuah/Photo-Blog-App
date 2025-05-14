@@ -108,5 +108,7 @@ exports.sendEmail = async (email, firstName, templateType) => {
         console.log(`Email sent to ${email}`);
     } catch (error) {
         console.error(`Error sending email:`, error);
-    }
+    } finally{
+        console.log("Send Email Done!!!");
+     }
 };
