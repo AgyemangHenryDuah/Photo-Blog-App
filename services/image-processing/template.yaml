@@ -16,6 +16,17 @@ Globals:
     Runtime: nodejs20.x
 
 Resources:
+
+  SharpLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: SharpLayer
+      ContentUri: ../../../common/layers/sharp/release-arm64.zip
+      CompatibleArchitectures:
+        - arm64
+      CompatibleRuntimes:
+        - nodejs20.x
+
   # SQS Queue for image processing
   ImageProcessingQueue:
     Type: AWS::SQS::Queue
@@ -44,7 +55,8 @@ Resources:
       MemorySize: 1024
       Layers:
         - !Ref SharedLayerArn
-        - arn:aws:lambda:us-west-2:123456789012:layer:sharp-v0-34-arm64:1
+        - !Ref SharpLayer
+        # - arn:aws:lambda:us-west-2:123456789012:layer:sharp-v0-34-arm64:1
       Environment:
         Variables:
           STAGING_BUCKET: !Ref StagingBucket
@@ -61,11 +73,11 @@ Resources:
         - SQSPollerPolicy:
             QueueName: !GetAtt ImageProcessingQueue.QueueName
         - arn:aws:iam::aws:policy/AmazonSESFullAccess
-        - Statement:
-            - Effect: Allow
-              Action:
-                - lambda:GetLayerVersion
-              Resource: arn:aws:lambda:us-west-2:123456789012:layer:sharp-v0-34-arm64:1
+        # - Statement:
+        #     - Effect: Allow
+        #       Action:
+        #         - lambda:GetLayerVersion
+        #       Resource: arn:aws:lambda:us-west-2:123456789012:layer:sharp-v0-34-arm64:1
       Events:
         SQSEvent:
           Type: SQS
