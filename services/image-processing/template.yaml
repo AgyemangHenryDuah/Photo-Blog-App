@@ -53,33 +53,27 @@ Resources:
       Description: Processes uploaded images
       Timeout: 180
       MemorySize: 1024
-      # Architectures:
-      #   - arm64
       Layers:
         - !Ref SharedLayerArn
-        # - !Ref SharpLayer
-        # - arn:aws:lambda:us-west-2:123456789012:layer:sharp-v0-34-arm64:1
       Environment:
         Variables:
           STAGING_BUCKET: !Ref StagingBucket
           PROCESSED_BUCKET: !Ref ProcessedBucketName
           PHOTOS_TABLE: !Ref PhotosTable
           PROCESSING_QUEUE: !Ref ImageProcessingQueue
+          ENVIRONMENT_NAME: !Ref Environment
       Policies:
         - S3CrudPolicy:
             BucketName: !Ref StagingBucket
         - S3CrudPolicy:
             BucketName: !Ref ProcessedBucketName
         - DynamoDBCrudPolicy:
-            TableName: !Ref PhotosTable
+            TableName: '*'
         - SQSPollerPolicy:
             QueueName: !GetAtt ImageProcessingQueue.QueueName
         - arn:aws:iam::aws:policy/AmazonSESFullAccess
-        # - Statement:
-        #     - Effect: Allow
-        #       Action:
-        #         - lambda:GetLayerVersion
-        #       Resource: arn:aws:lambda:us-west-2:123456789012:layer:sharp-v0-34-arm64:1
+        - SSMParameterReadPolicy:
+            ParameterName: '*'   
       Events:
         SQSEvent:
           Type: SQS
