@@ -2,7 +2,7 @@
 const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, GetCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
-const { createCanvas, loadImage } = require('canvas');
+const Jimp = require('jimp');
 const stream = require('stream');
 
 const { createResponse, parseBody, handleError } = require('/opt/nodejs/shared-utils/eventHandler.js');
@@ -83,9 +83,9 @@ exports.handler = async (event) => {
       // Convert the stream to a buffer
       const imageBuffer = await streamToBuffer(imageStream);
       
-      // Process the image with canvas - add watermark
+      // Process the image with jimp - add watermark
       console.log('Processing image with watermark');
-      const processedImageBuffer = await addWatermarkWithCanvas(imageBuffer, watermarkText, fileExt);
+      const processedImageBuffer = await addWatermark(imageBuffer, watermarkText, fileExt);
       
       // Upload the processed image to the processed bucket
       // Keep the same structure: users/userId/photoId.ext
@@ -138,53 +138,153 @@ exports.handler = async (event) => {
   return createResponse(200, { message: 'Image processing completed successfully' });
 };
 
-// Function to add watermark using canvas (no dependency on system fonts)
-async function addWatermarkWithCanvas(imageBuffer, watermarkText, format) {
+// Function to add watermark using Jimp (no font dependency)
+async function addWatermark(imageBuffer, watermarkText, format) {
   try {
-    // Load the image
-    const image = await loadImage(imageBuffer);
-    const width = image.width;
-    const height = image.height;
+    // Load the image with Jimp
+    const image = await Jimp.read(imageBuffer);
     
-    // Create a canvas with the image dimensions
-    const canvas = createCanvas(width, height);
-    const ctx = canvas.getContext('2d');
+    // Set watermark properties
+    const width = image.getWidth();
+    const height = image.getHeight();
+    const size = Math.max(16, Math.floor(width / 40)); // Dynamic size based on image width
+    const padding = Math.floor(size / 2);
     
-    // Draw the original image on the canvas
-    ctx.drawImage(image, 0, 0, width, height);
+    // Create a semi-transparent rectangle for the watermark background
+    const watermarkWidth = watermarkText.length * (size * 0.6); // Approximate width
+    const watermarkHeight = size * 1.2;
+    const rectX = width - watermarkWidth - padding;
+    const rectY = height - watermarkHeight - padding;
     
-    // Configure watermark text styling
-    ctx.fillStyle = 'rgba(128, 128, 128, 0.7)'; // Gray with 70% opacity
+    // Draw semi-transparent background for better text visibility
+    image.scan(rectX, rectY, watermarkWidth, watermarkHeight, function(x, y, idx) {
+      // Create semi-transparent overlay
+      image.setPixelColor(Jimp.rgbaToInt(128, 128, 128, 100), x, y);
+    });
     
-    // Use a generic font that's available in the canvas package
-    // No dependency on system fonts
-    const fontSize = Math.max(16, Math.floor(width / 40)); // Scale font with image size
-    ctx.font = `bold ${fontSize}px sans-serif`;
-    ctx.textAlign = 'right';
-    ctx.textBaseline = 'bottom';
+    // Draw watermark text using primitive pixel operations
+    // This approach avoids any system font dependencies
     
-    // Calculate position (bottom right corner with padding)
-    const padding = Math.floor(fontSize / 2);
-    const xPosition = width - padding;
-    const yPosition = height - padding;
+    // Split watermark into characters
+    const chars = watermarkText.split('');
     
-    // Add the watermark text
-    ctx.fillText(watermarkText, xPosition, yPosition);
+    // Draw each character
+    for (let i = 0; i < chars.length; i++) {
+      const charX = rectX + (i * size * 0.6);
+      const charY = rectY + (size * 0.1);
+      
+      // Draw the character using an alternative method
+      drawCharacter(image, chars[i], charX, charY, size);
+    }
     
-    // Convert to buffer with appropriate format
+    // Get buffer in appropriate format
+    let mimeType;
     if (format === 'jpg' || format === 'jpeg') {
-      return canvas.toBuffer('image/jpeg', { quality: 0.9 });
+      mimeType = Jimp.MIME_JPEG;
+      image.quality(90);
     } else if (format === 'png') {
-      return canvas.toBuffer('image/png', { compressionLevel: 9 });
+      mimeType = Jimp.MIME_PNG;
     } else if (format === 'webp') {
-      return canvas.toBuffer('image/webp', { quality: 0.9 });
+      // Fallback to PNG as Jimp doesn't natively support WebP
+      mimeType = Jimp.MIME_PNG;
     } else {
       // Default to PNG for unsupported formats
-      return canvas.toBuffer('image/png');
+      mimeType = Jimp.MIME_PNG;
     }
+    
+    return await image.getBufferAsync(mimeType);
   } catch (error) {
-    console.error('Error adding watermark with canvas:', error);
+    console.error('Error adding watermark with Jimp:', error);
     throw error;
+  }
+}
+
+// Function to draw a character without relying on fonts
+function drawCharacter(image, char, x, y, size) {
+  // Very simplified character drawing - just using white pixels
+  const color = Jimp.rgbaToInt(255, 255, 255, 200); // White with some transparency
+  const strokeWidth = Math.max(1, Math.floor(size / 10));
+  
+  // Simplified pixel-based characters
+  // This is a very primitive approach but works without any font dependencies
+  
+  // Convert coordinates to integers
+  const startX = Math.floor(x);
+  const startY = Math.floor(y);
+  const charWidth = Math.floor(size * 0.6);
+  const charHeight = Math.floor(size);
+  
+  // Draw different characters differently
+  switch(char.toUpperCase()) {
+    case ' ':
+      // Space - do nothing
+      break;
+      
+    case '|':
+      // Vertical line
+      for (let i = 0; i < charHeight; i++) {
+        for (let j = 0; j < strokeWidth; j++) {
+          image.setPixelColor(color, startX + Math.floor(charWidth/2) - Math.floor(strokeWidth/2) + j, startY + i);
+        }
+      }
+      break;
+      
+    case '-':
+      // Horizontal line
+      for (let i = 0; i < charWidth; i++) {
+        for (let j = 0; j < strokeWidth; j++) {
+          image.setPixelColor(color, startX + i, startY + Math.floor(charHeight/2) - Math.floor(strokeWidth/2) + j);
+        }
+      }
+      break;
+      
+    default:
+      // For letters, draw a simplified representation
+      // Top line
+      if ('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.includes(char.toUpperCase())) {
+        for (let i = 0; i < charWidth; i++) {
+          for (let j = 0; j < strokeWidth; j++) {
+            image.setPixelColor(color, startX + i, startY + j);
+          }
+        }
+      }
+      
+      // Bottom line
+      if ('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.includes(char.toUpperCase())) {
+        for (let i = 0; i < charWidth; i++) {
+          for (let j = 0; j < strokeWidth; j++) {
+            image.setPixelColor(color, startX + i, startY + charHeight - strokeWidth + j);
+          }
+        }
+      }
+      
+      // Left line
+      if ('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.includes(char.toUpperCase())) {
+        for (let i = 0; i < strokeWidth; i++) {
+          for (let j = 0; j < charHeight; j++) {
+            image.setPixelColor(color, startX + i, startY + j);
+          }
+        }
+      }
+      
+      // Right line
+      if ('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.includes(char.toUpperCase())) {
+        for (let i = 0; i < strokeWidth; i++) {
+          for (let j = 0; j < charHeight; j++) {
+            image.setPixelColor(color, startX + charWidth - strokeWidth + i, startY + j);
+          }
+        }
+      }
+      
+      // Middle line for some characters
+      if ('ABEFHPR0348'.includes(char.toUpperCase())) {
+        for (let i = 0; i < charWidth; i++) {
+          for (let j = 0; j < strokeWidth; j++) {
+            image.setPixelColor(color, startX + i, startY + Math.floor(charHeight/2) - Math.floor(strokeWidth/2) + j);
+          }
+        }
+      }
+      break;
   }
 }
 
