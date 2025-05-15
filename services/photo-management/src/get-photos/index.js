@@ -25,9 +25,14 @@ exports.handler = async (event) => {
       KeyConditionExpression: "userId = :uid",
       ExpressionAttributeValues: {
         ":uid": userId,
+        ":processedStatus": "processed",
         // ":false": false,
       },
+      ExpressionAttributeNames: {
+        "#status": "status"
+      },
       //FilterExpression: "attribute_not_exists(isDeleted) OR isDeleted = :false", // To bow to the frontend
+      FilterExpression: "#status = :processedStatus", 
       ScanIndexForward: false,
     };
 

@@ -173,6 +173,20 @@ Resources:
           - Id: DeleteOldFiles
             Status: Enabled
             ExpirationInDays: 1
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - "*"
+            AllowedMethods:
+              - GET
+              - PUT
+              - POST
+              - DELETE
+              - HEAD
+            AllowedOrigins:
+              - "*"  # For development. In production, specify your domains
+            ExposedHeaders:
+              - ETag
 
   # Set up staging bucket trigger permissions
   StagingBucketPermission:
