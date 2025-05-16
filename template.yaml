@@ -64,6 +64,8 @@ Resources:
   # Cross-region backup bucket in the DR region
   CrossRegionDRBackupBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub photo-blog-app-dr-${Environment}-${BackupRegion}-${AWS::AccountId}
       VersioningConfiguration:
@@ -73,10 +75,61 @@ Resources:
           - Id: DeleteOldVersions
             Status: Enabled
             NoncurrentVersionExpirationInDays: 30
-    DeletionPolicy: Retain
 
+  # Enhanced S3 Replication IAM role with cross-region permissions
+  S3ReplicationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Ref S3ReplicationPolicy
+
+  # Separate policy for replication - breaking the circular dependency
+  S3ReplicationPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Policy for S3 bucket replication
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          # Source bucket permissions - using string ARNs to avoid GetAtt circular references
+          - Effect: Allow
+            Action:
+              - s3:GetReplicationConfiguration
+              - s3:ListBucket
+            Resource:
+              - !Sub "arn:aws:s3:::photo-blog-app-processed-images-${Environment}-${AWS::AccountId}"
+          - Effect: Allow
+            Action:
+              - s3:GetObjectVersion
+              - s3:GetObjectVersionAcl
+              - s3:GetObjectVersionForReplication
+              - s3:GetObjectVersionTagging
+            Resource:
+              - !Sub "arn:aws:s3:::photo-blog-app-processed-images-${Environment}-${AWS::AccountId}/*"
+          # Cross-region destination bucket permissions
+          - Effect: Allow
+            Action:
+              - s3:ReplicateObject
+              - s3:ReplicateDelete
+              - s3:ReplicateTags
+              - s3:GetObjectVersionTagging
+            Resource:
+              - !Sub "arn:aws:s3:::photo-blog-app-dr-${Environment}-${BackupRegion}-${AWS::AccountId}/*"
+
+  # Create the processing bucket with replication configuration
+  # The replication role must exist first
   ProcessedImagesBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    # Removed the redundant DependsOn: S3ReplicationRole
     Properties:
       BucketName: !Sub photo-blog-app-processed-images-${Environment}-${AWS::AccountId}
       CorsConfiguration:
@@ -91,54 +144,11 @@ Resources:
       ReplicationConfiguration:
         Role: !GetAtt S3ReplicationRole.Arn
         Rules:
-          # Cross-region replication rule
           - Status: Enabled
             Destination:
-              Bucket: !GetAtt CrossRegionDRBackupBucket.Arn
+              Bucket: !Sub "arn:aws:s3:::photo-blog-app-dr-${Environment}-${BackupRegion}-${AWS::AccountId}"
               StorageClass: STANDARD
-            # Optional: Add a prefix to differentiate the replicated objects
             Prefix: ""
-
-  # Enhanced S3 Replication IAM role with cross-region permissions
-  S3ReplicationRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: s3.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: S3ReplicationPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              # Source bucket permissions
-              - Effect: Allow
-                Action:
-                  - s3:GetReplicationConfiguration
-                  - s3:ListBucket
-                Resource:
-                  - !GetAtt ProcessedImagesBucket.Arn
-              - Effect: Allow
-                Action:
-                  - s3:GetObjectVersion
-                  - s3:GetObjectVersionAcl
-                  - s3:GetObjectVersionForReplication
-                  - s3:GetObjectVersionTagging
-                Resource:
-                  - !Sub "${ProcessedImagesBucket.Arn}/*"
-              # Cross-region destination bucket permissions
-              - Effect: Allow
-                Action:
-                  - s3:ReplicateObject
-                  - s3:ReplicateDelete
-                  - s3:ReplicateTags
-                  - s3:GetObjectVersionTagging
-                Resource:
-                  - !Sub "${CrossRegionDRBackupBucket.Arn}/*"
 
   # NEVER LEAVE THIS UNCOMMENTED BEFORE DEPLOYING / PUSHING TO main or dev BRANCHES
   # KEEP THIS COMMENTED ALWAYS
