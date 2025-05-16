@@ -59,7 +59,6 @@ Resources:
       Endpoint: !Ref AdminEmail
       TopicArn: !Ref ServiceOutageNotificationTopic
 
-  # Common S3 buckets
 
   # Cross-region backup bucket in the DR region
   CrossRegionDRBackupBucket:
@@ -76,7 +75,7 @@ Resources:
             Status: Enabled
             NoncurrentVersionExpirationInDays: 30
 
-  # Enhanced S3 Replication IAM role with cross-region permissions
+
   S3ReplicationRole:
     Type: AWS::IAM::Role
     Properties:
@@ -90,7 +89,7 @@ Resources:
       ManagedPolicyArns:
         - !Ref S3ReplicationPolicy
 
-  # Separate policy for replication - breaking the circular dependency
+
   S3ReplicationPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
@@ -98,7 +97,6 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          # Source bucket permissions - using string ARNs to avoid GetAtt circular references
           - Effect: Allow
             Action:
               - s3:GetReplicationConfiguration
@@ -123,8 +121,7 @@ Resources:
             Resource:
               - !Sub "arn:aws:s3:::photo-blog-app-dr-${Environment}-${BackupRegion}-${AWS::AccountId}/*"
 
-  # Create the processing bucket with replication configuration
-  # The replication role must exist first
+
   ProcessedImagesBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
@@ -150,36 +147,6 @@ Resources:
               StorageClass: STANDARD
             Prefix: ""
 
-  # NEVER LEAVE THIS UNCOMMENTED BEFORE DEPLOYING / PUSHING TO main or dev BRANCHES
-  # KEEP THIS COMMENTED ALWAYS
-
-  # Nested stacks for each service
-  # AuthServiceStack:
-  #   Type: AWS::CloudFormation::Stack
-  #   Properties:
-  #     TemplateURL: ./services/authentication/template.yaml
-  #     Parameters:
-  #       Environment: !Ref Environment
-  #       DomainName: !Ref DomainName
-  #       SharedLayerArn: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/shared-layer}}'
-
-  # ImageProcessingStack:
-  #   Type: AWS::CloudFormation::Stack
-  #   Properties:
-  #     TemplateURL: ./services/image-processing/template.yaml
-  #     Parameters:
-  #       Environment: !Ref Environment
-  #       ProcessedBucketName: !Ref ProcessedImagesBucket
-  #       SharedLayerArn: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/shared-layer}}'
-
-  # PhotoManagementStack:
-  #   Type: AWS::CloudFormation::Stack
-  #   Properties:
-  #     TemplateURL: ./services/photo-management/template.yaml
-  #     Parameters:
-  #       Environment: !Ref Environment
-  #       ProcessedBucketName: !Ref ProcessedImagesBucket
-  #       SharedLayerArn: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/shared-layer}}'
 
 Outputs:
   ProcessedImagesBucketName:
