@@ -120,6 +120,34 @@ Resources:
             Auth:
               Authorizer: CognitoAuthorizer
 
+  # Empty Recycle Bin
+  EmptyRecycleBinFunction:
+      Type: AWS::Serverless::Function
+      Properties:
+        CodeUri: src/empty-recycle-bin/
+        Handler: index.handler
+        Description: Permanently deletes photos from S3 that are marked as deleted
+        Layers:
+          - !Ref SharedLayerArn
+        Environment:
+          Variables:
+            PHOTOS_TABLE: !Sub '{{resolve:ssm:/photo-blog-app/${Environment}/photos-table}}'
+            PROCESSED_BUCKET: !Ref ProcessedBucketName
+        Policies:
+          - DynamoDBCrudPolicy:
+              TableName: '*'
+          - S3CrudPolicy:
+              BucketName: !Ref ProcessedBucketName
+        Events:
+          ApiEvent:
+            Type: Api
+            Properties:
+              RestApiId: !Ref PhotosApi
+              Path: /photos/recycle-bin/empty
+              Method: delete
+              Auth:
+                Authorizer: CognitoAuthorizer
+
   # Restore photo from recycle bin
   RestorePhotoFunction:
     Type: AWS::Serverless::Function
