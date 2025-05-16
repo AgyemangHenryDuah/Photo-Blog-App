@@ -255,6 +255,8 @@ Resources:
       KeySchema:
         - AttributeName: shareToken
           KeyType: HASH
+      StreamSpecification:
+          StreamViewType: NEW_AND_OLD_IMAGES
       TimeToLiveSpecification:
         AttributeName: expiresAt
         Enabled: true
