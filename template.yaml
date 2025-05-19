@@ -142,7 +142,7 @@ Resources:
         Rules:
           - Status: Enabled
             Destination:
-              Bucket: !Sub "arn:aws:s3:::photo-blog-app-dr-${Environment}-${BackupRegion}-${AWS::AccountId}"
+              Bucket: !Sub "arn:aws:s3:::photo-blog-app-backup-bkt-${Environment}-${AWS::AccountId}"
               StorageClass: STANDARD
             Prefix: ""
 
