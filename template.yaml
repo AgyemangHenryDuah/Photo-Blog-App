@@ -66,7 +66,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub photo-blog-app-dr-${Environment}-${BackupRegion}-${AWS::AccountId}
+      BucketName: !Sub photo-blog-app-backup-bkt-${Environment}-${AWS::AccountId}
       VersioningConfiguration:
         Status: Enabled
       LifecycleConfiguration:
@@ -126,7 +126,6 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
-    # Removed the redundant DependsOn: S3ReplicationRole
     Properties:
       BucketName: !Sub photo-blog-app-processed-images-${Environment}-${AWS::AccountId}
       CorsConfiguration:
