@@ -83,7 +83,7 @@ Resources:
                 - !Ref SharedLayerArn
             Environment:
                 Variables:
-                    USER_POOL_ID: !Ref PrimaryUserPoolArn
+                    USER_POOL_ARN: !Ref PrimaryUserPoolArn
                     DR_USER_POOL_ID: !GetAtt DRUserPool.Arn
                     BACKUP_TABLE: !Ref CognitoBackupTable
                     PRIMARY_REGION: !Ref PrimaryRegion
