@@ -119,7 +119,7 @@ Resources:
               - s3:ReplicateTags
               - s3:GetObjectVersionTagging
             Resource:
-              - !Sub "arn:aws:s3:::photo-blog-app-dr-${Environment}-${BackupRegion}-${AWS::AccountId}/*"
+              - !Sub "arn:aws:s3:::photo-blog-app-backup-bkt-${Environment}-${AWS::AccountId}/*"
 
 
   ProcessedImagesBucket:
