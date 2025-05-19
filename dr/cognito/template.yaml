@@ -96,10 +96,13 @@ Resources:
                         - cognito-idp:AdminCreateUser
                         - cognito-idp:AdminSetUserPassword
                         - cognito-idp:AdminUpdateUserAttributes
+                        - cognito-idp:AdminGetUser
                         - cognito-idp:ListUsers
                       Resource: 
                         - !Ref PrimaryUserPoolArn
                         - !GetAtt DRUserPool.Arn
+                        # Allow access to any user pool in any region for this account
+                        - !Sub "arn:aws:cognito-idp:*:${AWS::AccountId}:userpool/*"
                 - AWSLambdaBasicExecutionRole
             Events:
                 DailyBackup:
