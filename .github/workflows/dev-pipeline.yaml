@@ -206,11 +206,14 @@ jobs:
       
       - name: Get Parameters from Primary Region
         run: |
-          # Get and store parameters we'll need when deploying to DR region
-          PRIMARY_USER_POOL_ID=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/user-pool-id" --query "Parameter.Value" --output text)
+          # Get the complete ARN instead of just the ID
+          PRIMARY_USER_POOL_ARN=$(aws cognito-idp describe-user-pool \
+            --user-pool-id $(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/user-pool-id" --query "Parameter.Value" --output text) \
+            --query "UserPool.Arn" \
+            --output text)
           SHARED_LAYER_ARN=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/shared-layer" --query "Parameter.Value" --output text)
           
-          echo "PRIMARY_USER_POOL_ID=${PRIMARY_USER_POOL_ID}" >> $GITHUB_ENV
+          echo "PRIMARY_USER_POOL_ARN=${PRIMARY_USER_POOL_ARN}" >> $GITHUB_ENV
           echo "SHARED_LAYER_ARN=${SHARED_LAYER_ARN}" >> $GITHUB_ENV
       
       # Switch to DR region for deployment
@@ -255,7 +258,7 @@ jobs:
               DomainName=${DOMAIN_NAME} \
               SharedLayerArn=${DR_LAYER_ARN} \
               PrimaryRegion=${AWS_REGION} \
-              UserPoolId=${PRIMARY_USER_POOL_ID} \
+              PrimaryUserPoolArn=${PRIMARY_USER_POOL_ARN} \
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
             --no-fail-on-empty-changeset
       
