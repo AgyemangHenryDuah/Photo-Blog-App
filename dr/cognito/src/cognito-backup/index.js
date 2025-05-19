@@ -8,9 +8,14 @@ const { CognitoIdentityProviderClient, ListUsersCommand, AdminGetUserCommand,
       console.log('Starting Cognito user backup...');
       
       const primaryRegion = process.env.PRIMARY_REGION;
-      const userPoolId = process.env.USER_POOL_ID.split('/').pop(); // Extract just the ID part
-      console.log('PRIMARY USER POOL ID: ', userPoolId)
-      const drUserPoolId = process.env.DR_USER_POOL_ID.split('/').pop(); // Extract just the ID part
+      console.log('PRIMARY USER POOL ID FROM ENV: ', process.env.USER_POOL_ID)
+      const userPoolId = process.env.USER_POOL_ID.includes(':') 
+        ? process.env.USER_POOL_ID.split('/').pop() // Extract just the ID part if it's an ARN
+        : process.env.USER_POOL_ID; // Use as-is if it's already just the ID
+      console.log('EXTRACTED PRIMARY USER POOL ID: ', userPoolId)
+      const drUserPoolId = process.env.DR_USER_POOL_ID.includes(':') 
+        ? process.env.DR_USER_POOL_ID.split('/').pop() // Extract just the ID part if it's an ARN
+        : process.env.DR_USER_POOL_ID; // Use as-is if it's already just the ID
       const backupTableName = process.env.BACKUP_TABLE;
       
       try {
