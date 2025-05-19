@@ -238,7 +238,6 @@ jobs:
           
           aws ssm put-parameter --name "/photo-blog-app/${ENVIRONMENT}/dr-user-pool-id" --value "${DR_USER_POOL_ID}" --type "String" --overwrite
           aws ssm put-parameter --name "/photo-blog-app/${ENVIRONMENT}/dr-user-pool-client-id" --value "${DR_USER_POOL_CLIENT_ID}" --type "String" --overwrite
-          aws ssm put-parameter --name "/photo-blog-app/${ENVIRONMENT}/backup-status-table" --value "${BACKUP_STATUS_TABLE}" --type "String" --overwrite
 
   deploy-image-processing:
     name: Deploy Image Processing Service
