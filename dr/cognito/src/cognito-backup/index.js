@@ -29,9 +29,16 @@ exports.handler = async (event) => {
     console.log('EXTRACTED DR USER POOL ID: ', drUserPoolId);
     
     try {
-        // Set up clients for both regions
-        const primaryCognitoClient = new CognitoIdentityProviderClient({ region: primaryRegion });
-        const drCognitoClient = new CognitoIdentityProviderClient(); // Uses the region the Lambda is deployed in
+        // Set up clients for both regions - explicitly specify regions
+        console.log(`Setting up primary client for region: ${primaryRegion}`);
+        console.log(`Setting up DR client for current Lambda region`);
+        
+        const primaryCognitoClient = new CognitoIdentityProviderClient({ 
+            region: primaryRegion 
+        });
+        const drCognitoClient = new CognitoIdentityProviderClient({ 
+            region: process.env.AWS_REGION || 'eu-west-1' // Explicitly set DR region
+        });
         const dynamoClient = new DynamoDBClient();
         const docClient = DynamoDBDocumentClient.from(dynamoClient);
         
