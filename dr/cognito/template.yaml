@@ -1,0 +1,217 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Enhanced Cognito User Pool Backup to DR Region
+
+Parameters:
+    Environment:
+        Type: String
+        Default: dev
+    DomainName:
+        Type: String
+        Default: mscv2group3.link
+    SharedLayerArn:
+        Type: String
+        Description: ARN of shared Lambda layer
+    BackupRegion:
+        Type: String
+        Default: eu-west-1
+        Description: DR backup region
+
+Resources:
+    # DR Region User Pool (created in backup region)
+    DRUserPool:
+        Type: AWS::Cognito::UserPool
+        Properties:
+            UserPoolName: !Sub photo-blog-app-users-dr-${Environment}
+            AutoVerifiedAttributes:
+                - email
+            UsernameAttributes:
+                - email
+            Schema:
+                - Name: email
+                  AttributeDataType: String
+                  Mutable: true
+                  Required: true
+                - Name: firstName
+                  AttributeDataType: String
+                  Mutable: true
+                  Required: false
+                - Name: lastName
+                  AttributeDataType: String
+                  Mutable: true
+                  Required: false
+            AdminCreateUserConfig:
+                AllowAdminCreateUserOnly: false
+
+    # DR User Pool Client
+    DRUserPoolClient:
+        Type: AWS::Cognito::UserPoolClient
+        Properties:
+            ClientName: !Sub photo-blog-app-client-dr-${Environment}
+            UserPoolId: !Ref DRUserPool
+            GenerateSecret: false
+            ExplicitAuthFlows:
+                - ALLOW_USER_SRP_AUTH
+                - ALLOW_REFRESH_TOKEN_AUTH
+                - ALLOW_USER_PASSWORD_AUTH
+                - ALLOW_ADMIN_USER_PASSWORD_AUTH
+                - ALLOW_CUSTOM_AUTH
+            ReadAttributes:
+                - email
+                - custom:firstName
+                - custom:lastName
+            WriteAttributes:
+                - email
+                - custom:firstName
+                - custom:lastName
+            PreventUserExistenceErrors: ENABLED
+
+    # Enhanced Backup Function
+    CognitoBackupFunction:
+        Type: AWS::Serverless::Function
+        Properties:
+            CodeUri: src/cognito-backup/
+            Handler: index.handler
+            Runtime: nodejs20.x
+            Timeout: 900  # 15 minutes for large user bases
+            MemorySize: 512
+            Description: Backup Cognito users to DR region and DynamoDB
+            Layers:
+                - !Ref SharedLayerArn
+            Environment:
+                Variables:
+                    USER_POOL_ID: !Ref UserPool
+                    DR_USER_POOL_ID: !Ref DRUserPool
+                    BACKUP_TABLE: !Ref CognitoBackupTable
+                    BACKUP_REGION: !Ref BackupRegion
+            Policies:
+                - DynamoDBCrudPolicy:
+                      TableName: !Ref CognitoBackupTable
+                - AmazonCognitoReadOnly
+                - Statement:
+                    - Effect: Allow
+                      Action:
+                        - cognito-idp:AdminCreateUser
+                        - cognito-idp:AdminSetUserPassword
+                        - cognito-idp:AdminUpdateUserAttributes
+                        - cognito-idp:ListUsers
+                      Resource: 
+                        - !GetAtt UserPool.Arn
+                        - !GetAtt DRUserPool.Arn
+                - AWSLambdaBasicExecutionRole
+            Events:
+                DailyBackup:
+                    Type: Schedule
+                    Properties:
+                        # Schedule: cron(0 2 * * ? *)  # Daily at 2 AM UTC
+                        Schedule: rate(5 minutes)
+                        Description: Daily Cognito user pool backup
+                ManualTrigger:
+                    Type: CloudWatchEvent
+                    Properties:
+                        Pattern:
+                            source: ["custom.cognito.backup"]
+                            detail-type: ["Manual Backup Trigger"]
+
+    # Backup Status Table
+    BackupStatusTable:
+        Type: AWS::DynamoDB::GlobalTable
+        Properties:
+            TableName: !Sub photo-blog-app-backup-status-${Environment}
+            BillingMode: PAY_PER_REQUEST
+            AttributeDefinitions:
+                - AttributeName: backupId
+                  AttributeType: S
+                - AttributeName: timestamp
+                  AttributeType: S
+            KeySchema:
+                - AttributeName: backupId
+                  KeyType: HASH
+                - AttributeName: timestamp
+                  KeyType: RANGE
+            TimeToLiveSpecification:
+                AttributeName: ttl
+                Enabled: true
+            StreamSpecification:
+                StreamViewType: NEW_AND_OLD_IMAGES
+            Replicas:
+                - Region: !Ref AWS::Region
+                - Region: !Ref BackupRegion
+
+    # CloudWatch Alarm for Backup Failures
+    BackupFailureAlarm:
+        Type: AWS::CloudWatch::Alarm
+        Properties:
+            AlarmName: !Sub CognitoBackupFailure-${Environment}
+            AlarmDescription: Alert when Cognito backup fails
+            MetricName: Errors
+            Namespace: AWS/Lambda
+            Statistic: Sum
+            Period: 300
+            EvaluationPeriods: 1
+            Threshold: 1
+            ComparisonOperator: GreaterThanOrEqualToThreshold
+            Dimensions:
+                - Name: FunctionName
+                  Value: !Ref CognitoBackupFunction
+            TreatMissingData: notBreaching
+
+    # SNS Topic for Backup Notifications
+    BackupNotificationTopic:
+        Type: AWS::SNS::Topic
+        Properties:
+            DisplayName: !Sub CognitoBackupNotifications-${Environment}
+            TopicName: !Sub cognito-backup-notifications-${Environment}
+
+    # Lambda for Backup Monitoring
+    BackupMonitorFunction:
+        Type: AWS::Serverless::Function
+        Properties:
+            CodeUri: src/backup-monitor/
+            Handler: index.handler
+            Runtime: nodejs20.x
+            Description: Monitor backup status and send notifications
+            Environment:
+                Variables:
+                    BACKUP_STATUS_TABLE: !Ref BackupStatusTable
+                    SNS_TOPIC_ARN: !Ref BackupNotificationTopic
+            Policies:
+                - DynamoDBReadPolicy:
+                      TableName: !Ref BackupStatusTable
+                - SNSPublishMessagePolicy:
+                      TopicName: !GetAtt BackupNotificationTopic.TopicName
+                - AWSLambdaBasicExecutionRole
+            Events:
+                BackupStatusStream:
+                    Type: DynamoDB
+                    Properties:
+                        Stream: !GetAtt BackupStatusTable.StreamArn
+                        StartingPosition: LATEST
+                        FilterCriteria:
+                            Filters:
+                                - Pattern: '{"eventName": ["INSERT", "MODIFY"]}'
+
+Outputs:
+    DRUserPoolId:
+        Description: DR Region Cognito User Pool ID
+        Value: !Ref DRUserPool
+        Export:
+            Name: !Sub ${AWS::StackName}-DRUserPoolId
+
+    DRUserPoolClientId:
+        Description: DR Region Cognito User Pool Client ID
+        Value: !Ref DRUserPoolClient
+        Export:
+            Name: !Sub ${AWS::StackName}-DRUserPoolClientId
+
+    BackupStatusTableName:
+        Description: Backup status tracking table
+        Value: !Ref BackupStatusTable
+        Export:
+            Name: !Sub ${AWS::StackName}-BackupStatusTable
+
+    BackupNotificationTopicArn:
+        Description: SNS Topic for backup notifications
+        Value: !Ref BackupNotificationTopic
+        Export:
+            Name: !Sub ${AWS::StackName}-BackupNotificationTopic
