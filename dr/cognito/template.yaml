@@ -83,7 +83,8 @@ Resources:
                 - !Ref SharedLayerArn
             Environment:
                 Variables:
-                    USER_POOL_ID: !Sub "arn:aws:cognito-idp:${PrimaryRegion}:${AWS::AccountId}:userpool/${UserPoolId}"
+                    # USER_POOL_ID: !Sub "arn:aws:cognito-idp:${PrimaryRegion}:${AWS::AccountId}:userpool/${UserPoolId}"
+                    USER_POOL_ID: !Sub "arn:aws:cognito-idp:eu-central-1:${AWS::AccountId}:userpool/${UserPoolId}"
                     DR_USER_POOL_ID: !GetAtt DRUserPool.Arn
                     BACKUP_TABLE: !Ref CognitoBackupTable
                     PRIMARY_REGION: !Ref PrimaryRegion
