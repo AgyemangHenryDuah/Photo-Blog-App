@@ -16,7 +16,6 @@ Parameters:
         Type: String
         Default: eu-west-1
         Description: DR backup region
-    # Add the missing parameter for the primary User Pool ID
     UserPoolId:
         Type: String
         Description: Primary region User Pool ID
@@ -70,7 +69,7 @@ Resources:
                 - custom:lastName
             PreventUserExistenceErrors: ENABLED
 
-    # Enhanced Backup Function
+    # Backup Function
     CognitoBackupFunction:
         Type: AWS::Serverless::Function
         Properties:

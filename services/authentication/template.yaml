@@ -104,59 +104,59 @@ Resources:
                     - IndexName: EmailIndex
 
 
-    # Lambda for Cognito backup (daily snapshot)
-    CognitoBackupFunction:
-        Type: AWS::Serverless::Function
-        Properties:
-            CodeUri: src/
-            Handler: cognitoBackup.handler
-            Description: Creates backup of Cognito user pool
-            Environment:
-                Variables:
-                    USER_POOL_ID: !Ref UserPool
-                    BACKUP_TABLE: !Ref CognitoBackupTable
-            Policies:
-                - DynamoDBCrudPolicy:
-                      TableName: !Ref CognitoBackupTable
-                - AmazonCognitoReadOnly
-                - AWSLambdaBasicExecutionRole
-            Events:
-                DailyBackup:
-                    Type: Schedule
-                    Properties:
-                        Schedule: cron(0 1 * * ? *)
-                        Description: Daily Cognito user pool backup
+    # # Lambda for Cognito backup (daily snapshot)
+    # CognitoBackupFunction:
+    #     Type: AWS::Serverless::Function
+    #     Properties:
+    #         CodeUri: src/
+    #         Handler: cognitoBackup.handler
+    #         Description: Creates backup of Cognito user pool
+    #         Environment:
+    #             Variables:
+    #                 USER_POOL_ID: !Ref UserPool
+    #                 BACKUP_TABLE: !Ref CognitoBackupTable
+    #         Policies:
+    #             - DynamoDBCrudPolicy:
+    #                   TableName: !Ref CognitoBackupTable
+    #             - AmazonCognitoReadOnly
+    #             - AWSLambdaBasicExecutionRole
+    #         Events:
+    #             DailyBackup:
+    #                 Type: Schedule
+    #                 Properties:
+    #                     Schedule: cron(0 1 * * ? *)
+    #                     Description: Daily Cognito user pool backup
 
-    # DynamoDB table for Cognito backup
-    CognitoBackupTable:
-        Type: AWS::DynamoDB::GlobalTable
-        Properties:
-            TableName: !Sub photo-blog-app-cognito-backup-${Environment}
-            BillingMode: PAY_PER_REQUEST
-            AttributeDefinitions:
-                - AttributeName: sub
-                  AttributeType: S
-                - AttributeName: email
-                  AttributeType: S
-            KeySchema:
-                - AttributeName: sub
-                  KeyType: HASH
-            GlobalSecondaryIndexes:
-                - IndexName: EmailIndex
-                  KeySchema:
-                    - AttributeName: email
-                      KeyType: HASH
-                  Projection:
-                    ProjectionType: ALL
-            StreamSpecification:
-                StreamViewType: NEW_AND_OLD_IMAGES
-            Replicas:
-                - Region: !Ref AWS::Region
-                  GlobalSecondaryIndexes:
-                    - IndexName: EmailIndex
-                - Region: !Ref BackupRegion
-                  GlobalSecondaryIndexes:
-                    - IndexName: EmailIndex
+    # # DynamoDB table for Cognito backup
+    # CognitoBackupTable:
+    #     Type: AWS::DynamoDB::GlobalTable
+    #     Properties:
+    #         TableName: !Sub photo-blog-app-cognito-backup-${Environment}
+    #         BillingMode: PAY_PER_REQUEST
+    #         AttributeDefinitions:
+    #             - AttributeName: sub
+    #               AttributeType: S
+    #             - AttributeName: email
+    #               AttributeType: S
+    #         KeySchema:
+    #             - AttributeName: sub
+    #               KeyType: HASH
+    #         GlobalSecondaryIndexes:
+    #             - IndexName: EmailIndex
+    #               KeySchema:
+    #                 - AttributeName: email
+    #                   KeyType: HASH
+    #               Projection:
+    #                 ProjectionType: ALL
+    #         StreamSpecification:
+    #             StreamViewType: NEW_AND_OLD_IMAGES
+    #         Replicas:
+    #             - Region: !Ref AWS::Region
+    #               GlobalSecondaryIndexes:
+    #                 - IndexName: EmailIndex
+    #             - Region: !Ref BackupRegion
+    #               GlobalSecondaryIndexes:
+    #                 - IndexName: EmailIndex
 
     # API Gateway
     AuthApiGateway:
