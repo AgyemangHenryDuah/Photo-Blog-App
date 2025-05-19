@@ -1,217 +1,200 @@
-
-import { 
-    CognitoIdentityProviderClient, 
-    ListUsersCommand,
-    AdminCreateUserCommand,
-    AdminSetUserPasswordCommand,
-    AdminUpdateUserAttributesCommand
-} from '@aws-sdk/client-cognito-identity-provider';
-import { 
-    DynamoDBClient,
-    PutItemCommand,
-    ScanCommand,
-    QueryCommand
-} from '@aws-sdk/client-dynamodb';
-import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
-
-// Initialize clients for primary and DR regions
-const primaryRegion = process.env.AWS_REGION;
-const drRegion = process.env.BACKUP_REGION;
-
-const primaryCognito = new CognitoIdentityProviderClient({ region: primaryRegion });
-const drCognito = new CognitoIdentityProviderClient({ region: drRegion });
-const dynamoClient = new DynamoDBClient({ region: primaryRegion });
-
-export const handler = async (event) => {
-    console.log('Starting Cognito User Pool backup process...');
-    
-    try {
-        // Export users from primary User Pool
-        const users = await exportUsersFromPrimaryPool();
-        console.log(`Found ${users.length} users to backup`);
-        
-        // Store backup in DynamoDB Global Table
-        await storeUsersInBackupTable(users);
-        console.log('Users stored in backup table');
-        
-        // Create/Update users in DR User Pool
-        await syncUsersToDRPool(users);
-        console.log('Users synced to DR User Pool');
-        
-        return {
-            statusCode: 200,
-            body: JSON.stringify({
-                message: 'Backup completed successfully',
-                usersBackedUp: users.length,
-                timestamp: new Date().toISOString()
-            })
-        };
-        
-    } catch (error) {
-        console.error('Backup failed:', error);
-        throw error;
-    }
-};
-
-async function exportUsersFromPrimaryPool() {
-    const users = [];
-    let paginationToken = null;
-    
-    do {
-        const params = {
-            UserPoolId: process.env.USER_POOL_ID,
-            Limit: 60, // Cognito limit
-            ...(paginationToken && { PaginationToken: paginationToken })
-        };
-        
-        const command = new ListUsersCommand(params);
-        const response = await primaryCognito.send(command);
-        
-        // Process and format user data
-        for (const user of response.Users) {
-            const formattedUser = {
-                sub: user.Username,
-                email: getAttributeValue(user.Attributes, 'email'),
-                firstName: getAttributeValue(user.Attributes, 'custom:firstName'),
-                lastName: getAttributeValue(user.Attributes, 'custom:lastName'),
-                userStatus: user.UserStatus,
-                enabled: user.Enabled,
-                userCreateDate: user.UserCreateDate,
-                userLastModifiedDate: user.UserLastModifiedDate,
-                attributes: user.Attributes,
-                temporaryPassword: user.UserStatus === 'FORCE_CHANGE_PASSWORD'
-            };
-            users.push(formattedUser);
-        }
-        
-        paginationToken = response.PaginationToken;
-    } while (paginationToken);
-    
-    return users;
-}
-
-async function storeUsersInBackupTable(users) {
-    const tableName = process.env.BACKUP_TABLE;
-    const batchSize = 25; // DynamoDB batch write limit
-    
-    for (let i = 0; i < users.length; i += batchSize) {
-        const batch = users.slice(i, i + batchSize);
-        
-        for (const user of batch) {
-            const item = {
-                ...user,
-                backupTimestamp: new Date().toISOString(),
-                backupVersion: generateBackupVersion()
-            };
-            
-            const params = {
-                TableName: tableName,
-                Item: marshall(item)
-            };
-            
-            const command = new PutItemCommand(params);
-            await dynamoClient.send(command);
-        }
-    }
-}
-
-async function syncUsersToDRPool(users) {
-    const drUserPoolId = process.env.DR_USER_POOL_ID;
-    
-    for (const user of users) {
-        try {
-            // Check if user already exists in DR pool
-            const existingUsers = await queryExistingUser(user.email);
-            
-            if (existingUsers.length === 0) {
-                // Create new user in DR pool
-                await createUserInDRPool(drUserPoolId, user);
-            } else {
-                // Update existing user
-                await updateUserInDRPool(drUserPoolId, existingUsers[0].sub, user);
-            }
-            
-        } catch (error) {
-            console.error(`Failed to sync user ${user.email}:`, error);
-            // Continue with other users even if one fails
-        }
-    }
-}
-
-async function createUserInDRPool(userPoolId, user) {
-    const messageAction = user.userStatus === 'CONFIRMED' ? 'SUPPRESS' : 'RESEND';
-    
-    const params = {
-        UserPoolId: userPoolId,
-        Username: user.sub,
-        UserAttributes: user.attributes,
-        MessageAction: messageAction,
-        TemporaryPassword: user.temporaryPassword ? generateTemporaryPassword() : undefined
-    };
-    
-    const command = new AdminCreateUserCommand(params);
-    await drCognito.send(command);
-    
-    // Set user status if confirmed
-    if (user.userStatus === 'CONFIRMED') {
-        await setUserPasswordInDRPool(userPoolId, user.sub);
-    }
-}
-
-async function updateUserInDRPool(userPoolId, username, user) {
-    const params = {
-        UserPoolId: userPoolId,
-        Username: username,
-        UserAttributes: user.attributes
-    };
-    
-    const command = new AdminUpdateUserAttributesCommand(params);
-    await drCognito.send(command);
-}
-
-async function setUserPasswordInDRPool(userPoolId, username) {
-    const params = {
-        UserPoolId: userPoolId,
-        Username: username,
-        Password: generateTemporaryPassword(),
-        Permanent: false
-    };
-    
-    const command = new AdminSetUserPasswordCommand(params);
-    await drCognito.send(command);
-}
-
-async function queryExistingUser(email) {
-    const params = {
-        TableName: process.env.BACKUP_TABLE,
-        IndexName: 'EmailIndex',
-        KeyConditionExpression: 'email = :email',
-        ExpressionAttributeValues: marshall({
-            ':email': email
-        })
-    };
-    
-    const command = new QueryCommand(params);
-    const response = await dynamoClient.send(command);
-    
-    return response.Items.map(item => unmarshall(item));
-}
-
-function getAttributeValue(attributes, name) {
-    const attribute = attributes.find(attr => attr.Name === name);
-    return attribute ? attribute.Value : null;
-}
-
-function generateBackupVersion() {
-    return `backup-${Date.now()}`;
-}
-
-function generateTemporaryPassword() {
-    // Generate a secure temporary password (will be changed on first login)
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
-    let password = '';
-    for (let i = 0; i < 12; i++) {
-        password += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return password + 'A1!'; // Ensure it meets Cognito password requirements
-}
+// Import SDK v3 clients
+const { CognitoIdentityProviderClient, ListUsersCommand, AdminGetUserCommand, 
+    AdminCreateUserCommand, AdminSetUserPasswordCommand, AdminUpdateUserAttributesCommand } = require('@aws-sdk/client-cognito-identity-provider');
+  const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+  const { DynamoDBDocumentClient, PutCommand } = require('@aws-sdk/lib-dynamodb');
+  
+  exports.handler = async (event) => {
+      console.log('Starting Cognito user backup...');
+      
+      const primaryRegion = process.env.PRIMARY_REGION;
+      const userPoolId = process.env.USER_POOL_ID.split('/').pop(); // Extract just the ID part
+      const drUserPoolId = process.env.DR_USER_POOL_ID.split('/').pop(); // Extract just the ID part
+      const backupTableName = process.env.BACKUP_TABLE;
+      
+      try {
+          // Set up clients for both regions
+          const primaryCognitoClient = new CognitoIdentityProviderClient({ region: primaryRegion });
+          const drCognitoClient = new CognitoIdentityProviderClient(); // Uses the region the Lambda is deployed in
+          const dynamoClient = new DynamoDBClient();
+          const docClient = DynamoDBDocumentClient.from(dynamoClient);
+          
+          // Get all users from primary user pool
+          console.log(`Fetching users from primary user pool: ${userPoolId}`);
+          const primaryUsers = await getAllUsers(primaryCognitoClient, userPoolId);
+          console.log(`Found ${primaryUsers.length} users in primary region`);
+          
+          // Back up each user to DR region
+          for (const user of primaryUsers) {
+              try {
+                  await backupUser(user, drCognitoClient, drUserPoolId);
+                  await recordBackupStatus(user, docClient, backupTableName, true);
+              } catch (error) {
+                  console.error(`Error backing up user ${user.Username}:`, error);
+                  await recordBackupStatus(user, docClient, backupTableName, false, error.message);
+              }
+          }
+          
+          return {
+              statusCode: 200,
+              body: JSON.stringify({
+                  message: `Successfully backed up ${primaryUsers.length} users`,
+              }),
+          };
+      } catch (error) {
+          console.error('Error in backup process:', error);
+          return {
+              statusCode: 500,
+              body: JSON.stringify({
+                  message: 'Error in backup process',
+                  error: error.message,
+              }),
+          };
+      }
+  };
+  
+  async function getAllUsers(cognitoClient, userPoolId) {
+      let users = [];
+      let paginationToken = null;
+      
+      do {
+          const params = {
+              UserPoolId: userPoolId,
+              Limit: 60,
+              ...(paginationToken && { PaginationToken: paginationToken }),
+          };
+          
+          const command = new ListUsersCommand(params);
+          const response = await cognitoClient.send(command);
+          users = users.concat(response.Users);
+          paginationToken = response.PaginationToken;
+      } while (paginationToken);
+      
+      return users;
+  }
+  
+  async function backupUser(user, drCognitoClient, drUserPoolId) {
+      const email = user.Attributes.find(attr => attr.Name === 'email')?.Value;
+      if (!email) {
+          throw new Error(`User ${user.Username} has no email attribute`);
+      }
+      
+      // Check if user already exists in DR pool
+      try {
+          const command = new AdminGetUserCommand({
+              UserPoolId: drUserPoolId,
+              Username: email
+          });
+          await drCognitoClient.send(command);
+          
+          // User exists, update attributes if needed
+          console.log(`User ${email} already exists in DR pool, updating attributes`);
+          return await updateUserAttributes(user, drCognitoClient, drUserPoolId);
+      } catch (error) {
+          if (error.name === 'UserNotFoundException') {
+              // User doesn't exist, create them
+              console.log(`Creating user ${email} in DR pool`);
+              return await createUser(user, drCognitoClient, drUserPoolId);
+          }
+          throw error;
+      }
+  }
+  
+  async function createUser(user, drCognitoClient, drUserPoolId) {
+      const email = user.Attributes.find(attr => attr.Name === 'email')?.Value;
+      
+      const userAttributes = user.Attributes
+          .filter(attr => !['sub'].includes(attr.Name)) // Filter out attributes that shouldn't be copied
+          .map(attr => {
+              return {
+                  Name: attr.Name,
+                  Value: attr.Value,
+              };
+          });
+      
+      const createParams = {
+          UserPoolId: drUserPoolId,
+          Username: email,
+          TemporaryPassword: generateTempPassword(),
+          UserAttributes: userAttributes,
+          MessageAction: 'SUPPRESS', // Don't send welcome email
+      };
+      
+      const createCommand = new AdminCreateUserCommand(createParams);
+      await drCognitoClient.send(createCommand);
+      
+      // Set permanent password (instead of temporary)
+      const passwordParams = {
+          UserPoolId: drUserPoolId,
+          Username: email,
+          Password: generateTempPassword(),
+          Permanent: true,
+      };
+      
+      const passwordCommand = new AdminSetUserPasswordCommand(passwordParams);
+      await drCognitoClient.send(passwordCommand);
+      
+      return true;
+  }
+  
+  async function updateUserAttributes(user, drCognitoClient, drUserPoolId) {
+      const email = user.Attributes.find(attr => attr.Name === 'email')?.Value;
+      
+      const userAttributes = user.Attributes
+          .filter(attr => !['sub', 'email'].includes(attr.Name)) // Don't update email or sub
+          .map(attr => {
+              return {
+                  Name: attr.Name,
+                  Value: attr.Value,
+              };
+          });
+      
+      if (userAttributes.length > 0) {
+          const params = {
+              UserPoolId: drUserPoolId,
+              Username: email,
+              UserAttributes: userAttributes,
+          };
+          
+          const command = new AdminUpdateUserAttributesCommand(params);
+          await drCognitoClient.send(command);
+      }
+      
+      return true;
+  }
+  
+  async function recordBackupStatus(user, docClient, tableName, success, errorMessage = null) {
+      const email = user.Attributes.find(attr => attr.Name === 'email')?.Value;
+      const sub = user.Attributes.find(attr => attr.Name === 'sub')?.Value;
+      
+      if (!sub) {
+          console.warn(`User ${email} has no sub attribute, skipping backup record`);
+          return;
+      }
+      
+      const item = {
+          sub: sub,
+          email: email,
+          username: user.Username,
+          lastBackup: new Date().toISOString(),
+          success: success,
+          ...(errorMessage && { errorMessage: errorMessage }),
+      };
+      
+      const command = new PutCommand({
+          TableName: tableName,
+          Item: item,
+      });
+      
+      await docClient.send(command);
+  }
+  
+  function generateTempPassword() {
+      // Generate a secure random password (this is just for DR, not for actual user login)
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()';
+      let password = '';
+      for (let i = 0; i < 20; i++) {
+          password += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return password;
+  }
