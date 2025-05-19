@@ -195,14 +195,55 @@ jobs:
         with:
           node-version: '20'
       - uses: aws-actions/setup-sam@v2
-      - uses: aws-actions/configure-aws-credentials@v2
+      
+      # First, get required parameters from primary region
+      - name: Configure Primary AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
       
-      # Deploy cognito backup service
-      - name: Build and deploy cognito backup service
+      - name: Get Parameters from Primary Region
+        run: |
+          # Get and store parameters we'll need when deploying to DR region
+          PRIMARY_USER_POOL_ID=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/user-pool-id" --query "Parameter.Value" --output text)
+          SHARED_LAYER_ARN=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/shared-layer" --query "Parameter.Value" --output text)
+          
+          echo "PRIMARY_USER_POOL_ID=${PRIMARY_USER_POOL_ID}" >> $GITHUB_ENV
+          echo "SHARED_LAYER_ARN=${SHARED_LAYER_ARN}" >> $GITHUB_ENV
+      
+      # Switch to DR region for deployment
+      - name: Configure DR AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.DR_REGION }}
+      
+      # Create shared layer in DR region if it doesn't exist
+      - name: Create shared layer in DR region
+        run: |
+          cd common/layers/nodejs
+          npm i
+          cd ..
+          zip -r layer_content.zip nodejs
+          
+          # Publish the layer in DR region
+          DR_LAYER_VERSION=$(aws lambda publish-layer-version \
+            --layer-name SHARED_LAYER_${ENVIRONMENT} \
+            --description "Shared Layer for Photo Blog App - ${ENVIRONMENT}" \
+            --zip-file fileb://layer_content.zip \
+            --compatible-runtimes nodejs20.x \
+            --region $DR_REGION \
+            --output text \
+            --query 'LayerVersionArn')
+            
+          echo "Published DR layer version: $DR_LAYER_VERSION"
+          echo "DR_LAYER_ARN=${DR_LAYER_VERSION}" >> $GITHUB_ENV
+      
+      # Deploy cognito backup service to DR region
+      - name: Build and deploy cognito backup service to DR region
         run: |
           cd dr/cognito
           sam build -t template.yaml
@@ -212,14 +253,14 @@ jobs:
             --parameter-overrides \
               Environment=${ENVIRONMENT} \
               DomainName=${DOMAIN_NAME} \
-              SharedLayerArn=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/shared-layer" --query "Parameter.Value" --output text) \
-              BackupRegion=${DR_REGION} \
-              UserPoolId=$(aws ssm get-parameter --name "/photo-blog-app/${ENVIRONMENT}/user-pool-id" --query "Parameter.Value" --output text) \
+              SharedLayerArn=${DR_LAYER_ARN} \
+              PrimaryRegion=${AWS_REGION} \
+              UserPoolId=${PRIMARY_USER_POOL_ID} \
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
             --no-fail-on-empty-changeset
       
-      # Export cognito backup resources to Parameter Store
-      - name: Export cognito backup resources
+      # Get DR resources and store them in Primary region's SSM
+      - name: Get DR resources
         run: |
           DR_USER_POOL_ID=$(aws cloudformation describe-stacks \
             --stack-name photo-blog-app-cognito-backup-${ENVIRONMENT} \
@@ -230,12 +271,20 @@ jobs:
             --stack-name photo-blog-app-cognito-backup-${ENVIRONMENT} \
             --query "Stacks[0].Outputs[?OutputKey=='DRUserPoolClientId'].OutputValue" \
             --output text)
-            
-          BACKUP_STATUS_TABLE=$(aws cloudformation describe-stacks \
-            --stack-name photo-blog-app-cognito-backup-${ENVIRONMENT} \
-            --query "Stacks[0].Outputs[?OutputKey=='BackupStatusTableName'].OutputValue" \
-            --output text)
-          
+      
+          echo "DR_USER_POOL_ID=${DR_USER_POOL_ID}" >> $GITHUB_ENV
+          echo "DR_USER_POOL_CLIENT_ID=${DR_USER_POOL_CLIENT_ID}" >> $GITHUB_ENV
+      
+      # Switch back to primary region to store SSM parameters
+      - name: Switch back to Primary region and store parameters
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Store DR resources in Primary region SSM
+        run: |
           aws ssm put-parameter --name "/photo-blog-app/${ENVIRONMENT}/dr-user-pool-id" --value "${DR_USER_POOL_ID}" --type "String" --overwrite
           aws ssm put-parameter --name "/photo-blog-app/${ENVIRONMENT}/dr-user-pool-client-id" --value "${DR_USER_POOL_CLIENT_ID}" --type "String" --overwrite
 

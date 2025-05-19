@@ -11,11 +11,11 @@ Parameters:
         Default: mscv2group3.link
     SharedLayerArn:
         Type: String
-        Description: ARN of shared Lambda layer
-    BackupRegion:
+        Description: ARN of shared Lambda layer in DR region
+    PrimaryRegion:
         Type: String
-        Default: eu-west-1
-        Description: DR backup region
+        Default: eu-central-1
+        Description: Primary region
     UserPoolId:
         Type: String
         Description: Primary region User Pool ID
@@ -78,19 +78,18 @@ Resources:
             Runtime: nodejs20.x
             Timeout: 900  # 15 minutes for large user bases
             MemorySize: 512
-            Description: Backup Cognito users to DR region and DynamoDB
+            Description: Backup Cognito users to DR region
             Layers:
                 - !Ref SharedLayerArn
             Environment:
                 Variables:
-                    USER_POOL_ID: !Ref UserPoolId  # Reference the parameter instead
-                    DR_USER_POOL_ID: !Ref DRUserPool
+                    USER_POOL_ID: !Sub "arn:aws:cognito-idp:${PrimaryRegion}:${AWS::AccountId}:userpool/${UserPoolId}"
+                    DR_USER_POOL_ID: !GetAtt DRUserPool.Arn
                     BACKUP_TABLE: !Ref CognitoBackupTable
-                    BACKUP_REGION: !Ref BackupRegion
+                    PRIMARY_REGION: !Ref PrimaryRegion
             Policies:
                 - DynamoDBCrudPolicy:
                       TableName: !Ref CognitoBackupTable
-                - AmazonCognitoReadOnly
                 - Statement:
                     - Effect: Allow
                       Action:
@@ -99,16 +98,15 @@ Resources:
                         - cognito-idp:AdminUpdateUserAttributes
                         - cognito-idp:ListUsers
                       Resource: 
-                        - !Sub "arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${UserPoolId}"
+                        - !Sub "arn:aws:cognito-idp:${PrimaryRegion}:${AWS::AccountId}:userpool/${UserPoolId}"
                         - !GetAtt DRUserPool.Arn
                 - AWSLambdaBasicExecutionRole
             Events:
                 DailyBackup:
                     Type: Schedule
                     Properties:
-                        # Schedule: cron(0 2 * * ? *)  # Daily at 2 AM UTC
-                        Schedule: rate(5 minutes)
-                        Description: Daily Cognito user pool backup
+                        Schedule: rate(5 minutes)  # Hourly backup for testing, change to cron(0 2 * * ? *) for daily at 2 AM UTC
+                        Description: Periodic Cognito user pool backup
                 ManualTrigger:
                     Type: CloudWatchEvent
                     Properties:
@@ -116,9 +114,9 @@ Resources:
                             source: ["custom.cognito.backup"]
                             detail-type: ["Manual Backup Trigger"]
 
-    # Backup Status Table
+    # Backup Status Table (no need for global table here as it's DR-specific)
     CognitoBackupTable:
-        Type: AWS::DynamoDB::GlobalTable
+        Type: AWS::DynamoDB::Table
         Properties:
             TableName: !Sub photo-blog-app-cognito-backup-${Environment}
             BillingMode: PAY_PER_REQUEST
@@ -139,14 +137,6 @@ Resources:
                     ProjectionType: ALL
             StreamSpecification:
                 StreamViewType: NEW_AND_OLD_IMAGES
-            Replicas:
-                - Region: !Ref AWS::Region
-                  GlobalSecondaryIndexes:
-                    - IndexName: EmailIndex
-                - Region: !Ref BackupRegion
-                  GlobalSecondaryIndexes:
-                    - IndexName: EmailIndex
-
 
 Outputs:
     DRUserPoolId:
@@ -161,3 +151,8 @@ Outputs:
         Export:
             Name: !Sub ${AWS::StackName}-DRUserPoolClientId
 
+    BackupStatusTableName:
+        Description: Cognito Backup Status Table Name
+        Value: !Ref CognitoBackupTable
+        Export:
+            Name: !Sub ${AWS::StackName}-BackupStatusTableName
