@@ -13,7 +13,8 @@ const { DynamoDBDocumentClient, PutCommand } = require('@aws-sdk/lib-dynamodb');
 exports.handler = async (event) => {
     console.log('Starting Cognito user backup...');
     
-    const primaryRegion = process.env.PRIMARY_REGION;
+    // const primaryRegion = process.env.PRIMARY_REGION;
+    const primaryRegion = 'eu-central-1'; //hard-coded for now
     const userPoolArn = process.env.USER_POOL_ARN; // Full ARN
     const drUserPoolArn = process.env.DR_USER_POOL_ID; // This is actually an ARN too
     const backupTableName = process.env.BACKUP_TABLE;
