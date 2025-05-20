@@ -136,6 +136,11 @@ Resources:
             MaxAge: 3600
       VersioningConfiguration:
         Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: false  # Allow public policies
+        RestrictPublicBuckets: false  # Allow public access via bucket policies
       ReplicationConfiguration:
         Role: !GetAtt S3ReplicationRole.Arn
         Rules:
