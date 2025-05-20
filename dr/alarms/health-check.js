@@ -27,7 +27,7 @@ exports.handler = async (event) => {
     let subject, messageBody;
     
     if (isAlarm) {
-      subject = `⚠️ ALERT: Frontend Outage Detected for ${domainName}`;
+      subject = `⚠️ ALERT: Service Outage Detected for ${domainName}`;
       messageBody = `
 FRONTEND SERVICE OUTAGE NOTIFICATION
 =====================================
@@ -49,7 +49,7 @@ Recommended Actions:
 This is an automated message from the Health Check Monitoring System.
 `;
     } else {
-      subject = `✅ RESOLVED: Frontend Service Recovered for ${domainName}`;
+      subject = `✅ RESOLVED: Service Recovered for ${domainName}`;
       messageBody = `
 FRONTEND SERVICE RECOVERY NOTIFICATION
 =====================================
