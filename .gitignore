@@ -1,4 +1,3 @@
-.github/workflows/prod-pipeline.yaml
 
 services/authentication/.aws-sam
 services/image-processing/.aws-sam
