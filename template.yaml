@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Photo Blog Application - Root Stack
+Description: Photo Blog Application - Root Stack with Frontend Health Check Alert
 
 Parameters:
   Environment:
@@ -22,11 +22,14 @@ Parameters:
     Type: String
     Default: eu-west-1
     Description: DR backup region
-
   AdminEmail:
     Type: String
     Default: john.kponyo@amalitech.com
-    Description: Administrator email for disaster alert notifications # Notifies the adminstrator of service outage via email.
+    Description: Administrator email for disaster alert notifications
+  HealthCheckPath:
+    Type: String
+    Default: /
+    Description: Path to check for frontend health (e.g., / or /healthcheck)
 
 Globals:
   Function:
@@ -59,7 +62,6 @@ Resources:
       Endpoint: !Ref AdminEmail
       TopicArn: !Ref ServiceOutageNotificationTopic
 
-
   # Cross-region backup bucket in the DR region
   CrossRegionDRBackupBucket:
     Type: AWS::S3::Bucket
@@ -75,7 +77,6 @@ Resources:
             Status: Enabled
             NoncurrentVersionExpirationInDays: 30
 
-
   S3ReplicationRole:
     Type: AWS::IAM::Role
     Properties:
@@ -88,7 +89,6 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - !Ref S3ReplicationPolicy
-
 
   S3ReplicationPolicy:
     Type: AWS::IAM::ManagedPolicy
@@ -120,7 +120,6 @@ Resources:
               - s3:GetObjectVersionTagging
             Resource:
               - !Sub "arn:aws:s3:::photo-blog-app-backup-bkt-${Environment}-${AWS::AccountId}/*"
-
 
   ProcessedImagesBucket:
     Type: AWS::S3::Bucket
@@ -159,6 +158,107 @@ Resources:
             Action: s3:GetObject
             Resource: !Sub 'arn:aws:s3:::photo-blog-app-processed-images-${Environment}-${AWS::AccountId}/*'
 
+  # ===== FRONTEND HEALTH CHECK ALERT SYSTEM =====
+
+  # Health Check for Frontend Availability
+  FrontendHealthCheck:
+    Type: AWS::Route53::HealthCheck
+    Properties:
+      HealthCheckConfig:
+        FullyQualifiedDomainName: !Ref DomainName
+        Port: 443
+        Type: HTTPS
+        ResourcePath: !Ref HealthCheckPath
+        RequestInterval: 30         # Check every 30 seconds
+        FailureThreshold: 3         # Failed after 3 consecutive failures
+        MeasureLatency: true
+      HealthCheckTags:
+        - Key: Name
+          Value: !Sub ${DomainName}-frontend-health-check
+
+  # CloudWatch Alarm for Health Check Failure
+  FrontendHealthAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub FrontendHealthFailure-${Environment}
+      AlarmDescription: !Sub "Alarm when frontend at ${DomainName} becomes unreachable"
+      Namespace: "AWS/Route53"
+      MetricName: "HealthCheckStatus"
+      Dimensions:
+        - Name: HealthCheckId
+          Value: !Ref FrontendHealthCheck
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      AlarmActions:
+        - !Ref LambdaFunctionAlarmTopic
+      OKActions:
+        - !Ref LambdaFunctionAlarmTopic
+
+  # SNS Topic for Lambda to receive alarm events
+  LambdaFunctionAlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub LambdaFunctionAlarmTopic-${Environment}
+      DisplayName: Health Check Alarm Events for Lambda
+
+  # Lambda IAM Role
+  HealthCheckLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: NotificationPermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref ServiceOutageNotificationTopic
+
+  # Lambda Function for Enhanced Notifications
+  HealthCheckLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: dr/alarms/
+      Handler: health-check.handler
+      Role: !GetAtt HealthCheckLambdaRole.Arn
+      Environment:
+        Variables:
+          NOTIFICATION_TOPIC_ARN: !Ref ServiceOutageNotificationTopic
+          DOMAIN_NAME: !Ref DomainName
+          ENVIRONMENT: !Ref Environment
+          PRIMARY_REGION: !Ref PrimaryRegion
+          BACKUP_REGION: !Ref BackupRegion
+
+  # Lambda Permission to allow SNS to invoke function
+  LambdaSNSPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref HealthCheckLambdaFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref LambdaFunctionAlarmTopic
+
+  # SNS Subscription for Lambda
+  LambdaSNSSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: lambda
+      Endpoint: !GetAtt HealthCheckLambdaFunction.Arn
+      TopicArn: !Ref LambdaFunctionAlarmTopic
 
 Outputs:
   ProcessedImagesBucketName:
@@ -172,3 +272,21 @@ Outputs:
     Value: !Ref CrossRegionDRBackupBucket
     Export:
       Name: !Sub ${AWS::StackName}-CrossRegionDRBackupBucket
+      
+  HealthCheckId:
+    Description: Route 53 Health Check ID
+    Value: !Ref FrontendHealthCheck
+    Export:
+      Name: !Sub ${AWS::StackName}-HealthCheckId
+    
+  ServiceOutageTopicArn:
+    Description: ARN of the SNS topic for service outage notifications
+    Value: !Ref ServiceOutageNotificationTopic
+    Export:
+      Name: !Sub ${AWS::StackName}-ServiceOutageTopicArn
+    
+  HealthCheckLambdaFunctionArn:
+    Description: ARN of the Lambda function for enhanced notifications
+    Value: !GetAtt HealthCheckLambdaFunction.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-HealthCheckLambdaArn
