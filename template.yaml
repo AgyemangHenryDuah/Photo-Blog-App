@@ -181,7 +181,7 @@ Resources:
         - Key: Name
           Value: !Sub ${DomainName}-frontend-health-check
 
-  # CloudWatch Alarm for Health Check Failure
+  # CloudWatch Alarm for Health Check Failure - UPDATED CONFIGURATION
   FrontendHealthAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -192,15 +192,18 @@ Resources:
       Dimensions:
         - Name: HealthCheckId
           Value: !Ref FrontendHealthCheck
-      Statistic: Minimum
-      Period: 60
-      EvaluationPeriods: 1
-      Threshold: 1
+      Statistic: Minimum          # Using Minimum since health check is binary (1=healthy, 0=unhealthy)
+      Period: 60                  # Check every 60 seconds
+      EvaluationPeriods: 2        # Require 2 consecutive data points to change state
+      Threshold: 1                # Trigger when health check status is LESS than 1 (meaning 0)
       ComparisonOperator: LessThanThreshold
-      TreatMissingData: breaching
+      TreatMissingData: breaching # Missing data is treated as a failure
+      DatapointsToAlarm: 2        # Require 2 data points to trigger alarm
       AlarmActions:
         - !Ref LambdaFunctionAlarmTopic
       OKActions:
+        - !Ref LambdaFunctionAlarmTopic
+      InsufficientDataActions:    # Also notify on insufficient data
         - !Ref LambdaFunctionAlarmTopic
 
   # SNS Topic for Lambda to receive alarm events
@@ -210,7 +213,7 @@ Resources:
       TopicName: !Sub LambdaFunctionAlarmTopic-${Environment}
       DisplayName: Health Check Alarm Events for Lambda
 
-  # Lambda IAM Role
+  # Lambda IAM Role with enhanced permissions
   HealthCheckLambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -232,6 +235,10 @@ Resources:
                 Action:
                   - sns:Publish
                 Resource: !Ref ServiceOutageNotificationTopic
+              - Effect: Allow
+                Action:
+                  - cloudwatch:DescribeAlarms
+                Resource: !Sub "arn:aws:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:FrontendHealthFailure-${Environment}"
 
   # Lambda Function for Enhanced Notifications
   HealthCheckLambdaFunction:

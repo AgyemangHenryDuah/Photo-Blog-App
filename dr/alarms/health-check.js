@@ -1,8 +1,10 @@
 // health-check.js
 const { SNSClient, PublishCommand } = require("@aws-sdk/client-sns");
+const { CloudWatchClient, DescribeAlarmsCommand } = require("@aws-sdk/client-cloudwatch");
 
-// Initialize SNS client
+// Initialize clients
 const snsClient = new SNSClient();
+const cloudWatchClient = new CloudWatchClient();
 
 exports.handler = async (event) => {
   console.log('Received event:', JSON.stringify(event, null, 2));
@@ -41,12 +43,15 @@ exports.handler = async (event) => {
     } catch (parseError) {
       console.error('Error parsing SNS message:', parseError);
       console.log('Raw message content:', snsMessage);
-      // Fallback to checking the raw message for ALARM status
-      const isRawAlarm = snsMessage.includes('ALARM');
       
-      // Send a generic notification with the raw message
+      // Determine alarm state from raw message
+      const isAlarm = snsMessage.includes('ALARM');
+      const isOK = snsMessage.includes('OK');
+      
+      // Send a notification based on the message content
       return await sendNotification({
-        isAlarm: isRawAlarm,
+        isAlarm,
+        isOK,
         topicArn,
         domainName,
         environment,
@@ -55,30 +60,53 @@ exports.handler = async (event) => {
       });
     }
     
-    // Determine if this is an alarm or OK notification - handle different formats
+    // Better state determination logic
     let isAlarm = false;
+    let isOK = false;
     
-    // CloudWatch Alarm format
+    // Check for standard CloudWatch alarm format
     if (parsedMessage.NewStateValue) {
       isAlarm = parsedMessage.NewStateValue === 'ALARM';
-    } 
-    // Alternative format that might be used
-    else if (parsedMessage.AlarmName && parsedMessage.NewStateValue) {
-      isAlarm = parsedMessage.NewStateValue === 'ALARM';
+      isOK = parsedMessage.NewStateValue === 'OK';
+      console.log(`State from NewStateValue: ${parsedMessage.NewStateValue}, isAlarm: ${isAlarm}, isOK: ${isOK}`);
     }
-    // Another possible format
-    else if (parsedMessage.Trigger && parsedMessage.Trigger.MetricName === 'HealthCheckStatus') {
-      isAlarm = parsedMessage.NewStateValue === 'ALARM' || 
-                (parsedMessage.Trigger.Statistic === 'Minimum' && 
-                 parsedMessage.Trigger.ComparisonOperator === 'LessThanThreshold');
+    // Check for detailed alarm format
+    else if (parsedMessage.AlarmName) {
+      // Verify the current state of the alarm via API call
+      try {
+        const describeAlarmsCommand = new DescribeAlarmsCommand({
+          AlarmNames: [parsedMessage.AlarmName]
+        });
+        
+        const alarmResponse = await cloudWatchClient.send(describeAlarmsCommand);
+        console.log('Current alarm state:', JSON.stringify(alarmResponse, null, 2));
+        
+        if (alarmResponse.MetricAlarms && alarmResponse.MetricAlarms.length > 0) {
+          const currentState = alarmResponse.MetricAlarms[0].StateValue;
+          isAlarm = currentState === 'ALARM';
+          isOK = currentState === 'OK';
+          console.log(`State from API: ${currentState}, isAlarm: ${isAlarm}, isOK: ${isOK}`);
+        }
+      } catch (cloudWatchError) {
+        console.error('Error fetching alarm state:', cloudWatchError);
+        // Fallback to message content
+        isAlarm = snsMessage.includes('ALARM');
+        isOK = snsMessage.includes('OK');
+      }
     }
-    // If we can't determine the state from parsed JSON, look for "ALARM" in raw message
+    // Fallback to checking the message content
     else {
-      isAlarm = snsMessage.includes('ALARM');
+      isAlarm = snsMessage.includes('ALARM') || snsMessage.toLowerCase().includes('unavailable');
+      isOK = snsMessage.includes('OK') || snsMessage.toLowerCase().includes('restored');
+      console.log(`State from message content, isAlarm: ${isAlarm}, isOK: ${isOK}`);
     }
+    
+    // Check the actual health check status if needed
+    // If we have conflicting states, we can add direct Route53 API calls here
     
     return await sendNotification({
       isAlarm,
+      isOK,
       topicArn,
       domainName,
       environment,
@@ -109,11 +137,12 @@ exports.handler = async (event) => {
   }
 };
 
-async function sendNotification({ isAlarm, topicArn, domainName, environment, primaryRegion, alarmDetails = {}, rawMessage = '' }) {
+async function sendNotification({ isAlarm, isOK, topicArn, domainName, environment, primaryRegion, alarmDetails = {}, rawMessage = '' }) {
   const timestamp = new Date().toISOString();
   
   let subject, messageBody;
   
+  // Only send notifications for definitive state changes
   if (isAlarm) {
     subject = `⚠️ ALERT: Service Outage Detected for ${domainName}`;
     messageBody = `
@@ -136,7 +165,7 @@ Recommended Actions:
 
 This is an automated message from the Health Check Monitoring System.
 `;
-  } else {
+  } else if (isOK) {
     subject = `✅ RESOLVED: Service Recovered for ${domainName}`;
     messageBody = `
 FRONTEND SERVICE RECOVERY NOTIFICATION
@@ -154,6 +183,12 @@ No further action is required.
 
 This is an automated message from the Health Check Monitoring System.
 `;
+  } else {
+    console.log('Indeterminate state - no notification will be sent');
+    return {
+      statusCode: 200,
+      body: JSON.stringify('No notification sent - indeterminate state')
+    };
   }
   
   if (Object.keys(alarmDetails).length > 0) {
