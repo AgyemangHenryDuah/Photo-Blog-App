@@ -163,6 +163,7 @@ Resources:
             Action: s3:GetObject
             Resource: !Sub 'arn:aws:s3:::photo-blog-app-processed-images-${Environment}-${AWS::AccountId}/*'
 
+
   # ===== FRONTEND HEALTH CHECK ALERT SYSTEM =====
 
   # Health Check for Frontend Availability
@@ -186,7 +187,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub FrontendHealthFailure-${Environment}
-      AlarmDescription: !Sub "Alarm when frontend at ${DomainName} becomes unreachable."
+      AlarmDescription: !Sub "Alarm when frontend at ${DomainName} becomes unreachable..."
       Namespace: "AWS/Route53"
       MetricName: "HealthCheckStatus"
       Dimensions:

@@ -108,7 +108,7 @@ Resources:
                 DailyBackup:
                     Type: Schedule
                     Properties:
-                        Schedule: rate(1 minutes)  #  For testing, change to cron(0 2 * * ? *) for daily at 2 AM UTC
+                        Schedule: rate(5 minutes)  #  For testing, change to cron(0 2 * * ? *) for daily at 2 AM UTC
                         Description: Periodic Cognito user pool backup
                 ManualTrigger:
                     Type: CloudWatchEvent
